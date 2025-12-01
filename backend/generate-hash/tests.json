@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "name": "Generate hash for admin123",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "password": "admin123"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "password": "admin123",
+        "verification": "success"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
