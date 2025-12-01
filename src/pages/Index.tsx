@@ -916,33 +916,6 @@ const Index = () => {
               </CardContent>
             </Card>
 
-        {currentView === 'admin' && user.is_admin && (
-          <div className="space-y-8">
-            <div>
-              <h2 className="text-3xl font-bold mb-2">Панель администратора</h2>
-              <p className="text-muted-foreground">Управление контентом платформы</p>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Код приглашения для учеников</CardTitle>
-                <CardDescription>Дайте этот код ученикам для регистрации</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <div className="bg-primary/10 p-4 rounded-lg text-center">
-                      <p className="text-3xl font-bold text-primary tracking-wider">{inviteCode}</p>
-                    </div>
-                  </div>
-                  <Button onClick={generateInviteCode} variant="outline">
-                    <Icon name="RefreshCw" size={16} className="mr-2" />
-                    Новый код
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
             <Card>
               <CardHeader>
                 <CardTitle>Создать вебинар</CardTitle>
