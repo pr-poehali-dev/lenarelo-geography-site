@@ -89,28 +89,39 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             conn = psycopg2.connect(database_url)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             
-            cur.execute(
-                "INSERT INTO users (username, password_hash, email, full_name, is_admin) VALUES (%s, %s, %s, %s, FALSE) RETURNING id, username, email, full_name, is_admin",
-                (username, password_hash, email, full_name)
-            )
-            user = cur.fetchone()
-            conn.commit()
-            
-            cur.close()
-            conn.close()
-            
-            return {
-                'statusCode': 200,
-                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-                'body': json.dumps({
-                    'id': user['id'],
-                    'username': user['username'],
-                    'email': user['email'],
-                    'full_name': user['full_name'],
-                    'is_admin': user['is_admin']
-                }),
-                'isBase64Encoded': False
-            }
+            try:
+                cur.execute(
+                    "INSERT INTO users (username, password_hash, email, full_name, is_admin) VALUES (%s, %s, %s, %s, FALSE) RETURNING id, username, email, full_name, is_admin",
+                    (username, password_hash, email, full_name)
+                )
+                user = cur.fetchone()
+                conn.commit()
+                
+                cur.close()
+                conn.close()
+                
+                return {
+                    'statusCode': 200,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({
+                        'id': user['id'],
+                        'username': user['username'],
+                        'email': user['email'],
+                        'full_name': user['full_name'],
+                        'is_admin': user['is_admin']
+                    }),
+                    'isBase64Encoded': False
+                }
+            except psycopg2.IntegrityError:
+                conn.rollback()
+                cur.close()
+                conn.close()
+                return {
+                    'statusCode': 400,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'Пользователь с таким логином или email уже существует'}),
+                    'isBase64Encoded': False
+                }
     
     return {
         'statusCode': 405,

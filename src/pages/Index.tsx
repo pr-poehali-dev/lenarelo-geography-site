@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,7 +15,7 @@ const API_URLS = {
 const Index = () => {
   const [user, setUser] = useState<any>(null);
   const [isLogin, setIsLogin] = useState(true);
-  const [currentView, setCurrentView] = useState<'home' | 'profile' | 'webinars' | 'homework' | 'admin' | 'contacts'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'profile' | 'webinars' | 'homework' | 'schedule' | 'admin' | 'contacts'>('home');
   
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -27,6 +26,10 @@ const Index = () => {
   const [homework, setHomework] = useState<any[]>([]);
   const [homeworkStats, setHomeworkStats] = useState<any>(null);
   const [selectedWebinar, setSelectedWebinar] = useState<any>(null);
+  const [selectedHomework, setSelectedHomework] = useState<any>(null);
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   
   const [newWebinar, setNewWebinar] = useState({ title: '', description: '', video_url: '', duration: 0 });
   const [newHomework, setNewHomework] = useState({
@@ -108,6 +111,12 @@ const Index = () => {
     setHomeworkStats(data);
   };
 
+  const loadSubmissions = async (homeworkId: number) => {
+    const res = await fetch(API_URLS.homework + `?action=submissions&homework_id=${homeworkId}`);
+    const data = await res.json();
+    setSubmissions(data);
+  };
+
   const createWebinar = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -144,6 +153,113 @@ const Index = () => {
       loadHomework();
       alert('Домашнее задание создано!');
     }
+  };
+
+  const gradeSubmission = async (submissionId: number, score: number, feedback: string) => {
+    const res = await fetch(API_URLS.homework, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': user?.id
+      },
+      body: JSON.stringify({
+        action: 'grade',
+        submission_id: submissionId,
+        score,
+        feedback
+      })
+    });
+    
+    if (res.ok) {
+      if (selectedHomework) {
+        loadSubmissions(selectedHomework.id);
+      }
+      alert('Оценка выставлена!');
+    }
+  };
+
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    
+    return { daysInMonth, startingDayOfWeek };
+  };
+
+  const getHomeworkForDate = (date: Date) => {
+    return homework.filter(hw => {
+      const hwDate = new Date(hw.deadline);
+      return hwDate.toDateString() === date.toDateString();
+    });
+  };
+
+  const renderCalendar = () => {
+    const { daysInMonth, startingDayOfWeek } = getDaysInMonth(currentMonth);
+    const days = [];
+    const weekDays = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+    
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(<div key={`empty-${i}`} className="aspect-square p-2"></div>);
+    }
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+      const homeworkForDay = getHomeworkForDate(date);
+      const isToday = date.toDateString() === new Date().toDateString();
+      
+      days.push(
+        <div
+          key={day}
+          className={`aspect-square p-2 border rounded-lg ${isToday ? 'bg-primary/10 border-primary' : 'bg-white'} hover:shadow-md transition-shadow cursor-pointer`}
+        >
+          <div className="text-sm font-semibold mb-1">{day}</div>
+          {homeworkForDay.map(hw => (
+            <div key={hw.id} className="text-xs bg-primary/20 rounded px-1 py-0.5 mb-1 truncate">
+              {hw.title}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <Button variant="outline" size="sm" onClick={() => {
+            const newDate = new Date(currentMonth);
+            newDate.setMonth(newDate.getMonth() - 1);
+            setCurrentMonth(newDate);
+          }}>
+            <Icon name="ChevronLeft" size={16} />
+          </Button>
+          <h3 className="text-lg font-semibold">
+            {currentMonth.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}
+          </h3>
+          <Button variant="outline" size="sm" onClick={() => {
+            const newDate = new Date(currentMonth);
+            newDate.setMonth(newDate.getMonth() + 1);
+            setCurrentMonth(newDate);
+          }}>
+            <Icon name="ChevronRight" size={16} />
+          </Button>
+        </div>
+        
+        <div className="grid grid-cols-7 gap-2 mb-2">
+          {weekDays.map(day => (
+            <div key={day} className="text-center text-sm font-semibold text-muted-foreground">
+              {day}
+            </div>
+          ))}
+        </div>
+        
+        <div className="grid grid-cols-7 gap-2">
+          {days}
+        </div>
+      </div>
+    );
   };
 
   if (!user) {
@@ -258,7 +374,14 @@ const Index = () => {
                 onClick={() => setCurrentView('homework')}
               >
                 <Icon name="BookOpen" size={18} className="mr-2" />
-                Домашние задания
+                Домашка
+              </Button>
+              <Button 
+                variant={currentView === 'schedule' ? 'default' : 'ghost'}
+                onClick={() => setCurrentView('schedule')}
+              >
+                <Icon name="Calendar" size={18} className="mr-2" />
+                Расписание
               </Button>
               {user.is_admin && (
                 <Button 
@@ -274,13 +397,12 @@ const Index = () => {
                 onClick={() => setCurrentView('profile')}
               >
                 <Icon name="User" size={18} className="mr-2" />
-                Профиль
+                {user.full_name || user.username}
               </Button>
             </nav>
 
             <Button variant="outline" onClick={handleLogout}>
-              <Icon name="LogOut" size={18} className="mr-2" />
-              Выйти
+              <Icon name="LogOut" size={18} />
             </Button>
           </div>
         </div>
@@ -454,58 +576,195 @@ const Index = () => {
               </div>
             )}
 
-            <div className="space-y-4">
-              {homework.map((hw) => {
-                const deadline = new Date(hw.deadline);
-                const isOverdue = deadline < new Date();
+            {selectedHomework && user.is_admin ? (
+              <div className="space-y-4">
+                <Button variant="ghost" onClick={() => {
+                  setSelectedHomework(null);
+                  setSubmissions([]);
+                }}>
+                  <Icon name="ArrowLeft" size={20} className="mr-2" />
+                  Назад к списку
+                </Button>
                 
-                return (
-                  <Card key={hw.id} className="hover:shadow-md transition-shadow">
-                    <CardHeader>
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <CardTitle>{hw.title}</CardTitle>
-                          <CardDescription>{hw.description}</CardDescription>
-                        </div>
-                        <Badge variant={isOverdue ? 'destructive' : 'default'}>
-                          {isOverdue ? 'Просрочено' : 'Активно'}
-                        </Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                          <p className="text-sm text-muted-foreground flex items-center gap-2">
-                            <Icon name="Calendar" size={16} />
-                            Дедлайн: {deadline.toLocaleDateString('ru-RU')}
-                          </p>
-                          <p className="text-sm">
-                            <Badge variant="outline">
-                              {hw.homework_type === 'file' && 'Файл'}
-                              {hw.homework_type === 'text' && 'Текст'}
-                              {hw.homework_type === 'test' && 'Тест'}
-                            </Badge>
-                          </p>
-                        </div>
-                        <Button>
-                          Выполнить
-                          <Icon name="ArrowRight" size={16} className="ml-2" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-              
-              {homework.length === 0 && (
                 <Card>
-                  <CardContent className="py-12 text-center">
-                    <Icon name="BookOpen" size={48} className="mx-auto text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">Домашние задания пока не добавлены</p>
+                  <CardHeader>
+                    <CardTitle>Сданные работы: {selectedHomework.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {submissions.length > 0 ? (
+                      <div className="space-y-4">
+                        {submissions.map((sub) => (
+                          <Card key={sub.id}>
+                            <CardContent className="pt-6">
+                              <div className="space-y-3">
+                                <div className="flex justify-between items-start">
+                                  <div>
+                                    <p className="font-semibold">{sub.student_name}</p>
+                                    <p className="text-sm text-muted-foreground">
+                                      Сдано: {new Date(sub.submitted_at).toLocaleString('ru-RU')}
+                                    </p>
+                                  </div>
+                                  {sub.score !== null && (
+                                    <Badge variant="default">{sub.score}%</Badge>
+                                  )}
+                                </div>
+                                
+                                {!sub.score && (
+                                  <div className="space-y-2">
+                                    <Input 
+                                      type="number"
+                                      placeholder="Оценка (0-100)"
+                                      id={`score-${sub.id}`}
+                                      min="0"
+                                      max="100"
+                                    />
+                                    <Textarea 
+                                      placeholder="Комментарий (необязательно)"
+                                      id={`feedback-${sub.id}`}
+                                      rows={2}
+                                    />
+                                    <Button onClick={() => {
+                                      const scoreInput = document.getElementById(`score-${sub.id}`) as HTMLInputElement;
+                                      const feedbackInput = document.getElementById(`feedback-${sub.id}`) as HTMLTextAreaElement;
+                                      gradeSubmission(sub.id, parseInt(scoreInput.value), feedbackInput.value);
+                                    }}>
+                                      Выставить оценку
+                                    </Button>
+                                  </div>
+                                )}
+                                
+                                {sub.feedback && (
+                                  <div className="bg-muted p-3 rounded-lg">
+                                    <p className="text-sm font-medium mb-1">Комментарий:</p>
+                                    <p className="text-sm">{sub.feedback}</p>
+                                  </div>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-center text-muted-foreground py-8">Работы ещё не сданы</p>
+                    )}
                   </CardContent>
                 </Card>
-              )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {homework.map((hw) => {
+                  const deadline = new Date(hw.deadline);
+                  const isOverdue = deadline < new Date();
+                  
+                  return (
+                    <Card key={hw.id} className="hover:shadow-md transition-shadow">
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle>{hw.title}</CardTitle>
+                            <CardDescription>{hw.description}</CardDescription>
+                          </div>
+                          <Badge variant={isOverdue ? 'destructive' : 'default'}>
+                            {isOverdue ? 'Просрочено' : 'Активно'}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <p className="text-sm text-muted-foreground flex items-center gap-2">
+                              <Icon name="Calendar" size={16} />
+                              Дедлайн: {deadline.toLocaleString('ru-RU')}
+                            </p>
+                            <p className="text-sm">
+                              <Badge variant="outline">
+                                {hw.homework_type === 'file' && 'Файл'}
+                                {hw.homework_type === 'text' && 'Текст'}
+                                {hw.homework_type === 'test' && 'Тест'}
+                              </Badge>
+                            </p>
+                          </div>
+                          {user.is_admin ? (
+                            <Button onClick={() => {
+                              setSelectedHomework(hw);
+                              loadSubmissions(hw.id);
+                            }}>
+                              Посмотреть работы
+                              <Icon name="ArrowRight" size={16} className="ml-2" />
+                            </Button>
+                          ) : (
+                            <Button>
+                              Выполнить
+                              <Icon name="ArrowRight" size={16} className="ml-2" />
+                            </Button>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+                
+                {homework.length === 0 && (
+                  <Card>
+                    <CardContent className="py-12 text-center">
+                      <Icon name="BookOpen" size={48} className="mx-auto text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">Домашние задания пока не добавлены</p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {currentView === 'schedule' && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-3xl font-bold mb-2">Расписание дедлайнов</h2>
+              <p className="text-muted-foreground">Календарь домашних заданий</p>
             </div>
+
+            <Card>
+              <CardContent className="pt-6">
+                {renderCalendar()}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Ближайшие дедлайны</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {homework
+                    .filter(hw => new Date(hw.deadline) > new Date())
+                    .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
+                    .slice(0, 5)
+                    .map(hw => {
+                      const deadline = new Date(hw.deadline);
+                      const daysLeft = Math.ceil((deadline.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                      
+                      return (
+                        <div key={hw.id} className="flex justify-between items-center p-3 border rounded-lg">
+                          <div>
+                            <p className="font-medium">{hw.title}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {deadline.toLocaleString('ru-RU')}
+                            </p>
+                          </div>
+                          <Badge variant={daysLeft <= 2 ? 'destructive' : 'default'}>
+                            {daysLeft === 0 ? 'Сегодня' : daysLeft === 1 ? 'Завтра' : `Через ${daysLeft} дн.`}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  
+                  {homework.filter(hw => new Date(hw.deadline) > new Date()).length === 0 && (
+                    <p className="text-center text-muted-foreground py-4">Нет предстоящих дедлайнов</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
 

@@ -50,6 +50,29 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'isBase64Encoded': False
             }
         
+        elif action == 'submissions':
+            homework_id = params.get('homework_id')
+            
+            cur.execute("""
+                SELECT hs.*, u.full_name as student_name, u.username
+                FROM homework_submissions hs
+                LEFT JOIN users u ON hs.user_id = u.id
+                WHERE hs.homework_id = %s
+                ORDER BY hs.submitted_at DESC
+            """, (homework_id,))
+            
+            submissions = cur.fetchall()
+            
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps([dict(s) for s in submissions], default=str),
+                'isBase64Encoded': False
+            }
+        
         elif action == 'stats':
             headers = event.get('headers', {})
             user_id = headers.get('x-user-id') or headers.get('X-User-Id')
@@ -122,6 +145,28 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             cur.execute(
                 "INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url) VALUES (%s, %s, %s, %s, %s) RETURNING *",
                 (homework_id, user_id, submission_type, json.dumps(submission_data) if submission_data else None, file_url)
+            )
+            submission = cur.fetchone()
+            conn.commit()
+            
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps(dict(submission), default=str),
+                'isBase64Encoded': False
+            }
+        
+        elif action == 'grade':
+            submission_id = body.get('submission_id')
+            score = body.get('score')
+            feedback = body.get('feedback', '')
+            
+            cur.execute(
+                "UPDATE homework_submissions SET score = %s, feedback = %s WHERE id = %s RETURNING *",
+                (score, feedback, submission_id)
             )
             submission = cur.fetchone()
             conn.commit()
