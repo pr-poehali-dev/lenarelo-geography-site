@@ -30,7 +30,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     database_url = os.environ.get('DATABASE_URL')
     
     if method == 'POST':
-        body = json.loads(event.get('body', '{}'))
+        try:
+            body = json.loads(event.get('body', '{}'))
+        except:
+            return {
+                'statusCode': 400,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'Invalid JSON'}),
+                'isBase64Encoded': False
+            }
+        
         action = body.get('action')
         
         if action == 'login':
