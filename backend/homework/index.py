@@ -97,6 +97,30 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'body': json.dumps(dict(stats), default=str),
                 'isBase64Encoded': False
             }
+        
+        elif action == 'my_submissions':
+            headers = event.get('headers', {})
+            user_id = headers.get('x-user-id') or headers.get('X-User-Id')
+            
+            cur.execute("""
+                SELECT hs.*, h.title as homework_title
+                FROM homework_submissions hs
+                LEFT JOIN homework h ON hs.homework_id = h.id
+                WHERE hs.user_id = %s
+                ORDER BY hs.submitted_at DESC
+            """, (user_id,))
+            
+            submissions = cur.fetchall()
+            
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps([dict(s) for s in submissions], default=str),
+                'isBase64Encoded': False
+            }
     
     elif method == 'POST':
         body = json.loads(event.get('body', '{}'))

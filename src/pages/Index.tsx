@@ -28,6 +28,10 @@ const Index = () => {
   const [selectedWebinar, setSelectedWebinar] = useState<any>(null);
   const [selectedHomework, setSelectedHomework] = useState<any>(null);
   const [submissions, setSubmissions] = useState<any[]>([]);
+  const [mySubmissions, setMySubmissions] = useState<any[]>([]);
+  const [submissionText, setSubmissionText] = useState('');
+  const [showInviteCode, setShowInviteCode] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
   
   const [currentMonth, setCurrentMonth] = useState(new Date());
   
@@ -51,8 +55,24 @@ const Index = () => {
       loadWebinars();
       loadHomework();
       loadHomeworkStats();
+      loadMySubmissions();
+      if (user.is_admin) {
+        generateInviteCode();
+      }
     }
   }, [user]);
+
+  const generateInviteCode = () => {
+    setInviteCode(Math.random().toString(36).substring(2, 10).toUpperCase());
+  };
+
+  const loadMySubmissions = async () => {
+    const res = await fetch(API_URLS.homework + `?action=my_submissions`, {
+      headers: { 'X-User-Id': user?.id }
+    });
+    const data = await res.json();
+    setMySubmissions(data);
+  };
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,25 +83,32 @@ const Index = () => {
     if (!isLogin) {
       body.email = email;
       body.full_name = fullName;
+      body.invite_code = inviteCode;
     }
     
-    const res = await fetch(API_URLS.auth, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    
-    const data = await res.json();
-    
-    if (res.ok) {
-      setUser(data);
-      localStorage.setItem('user', JSON.stringify(data));
-      setUsername('');
-      setPassword('');
-      setEmail('');
-      setFullName('');
-    } else {
-      alert(data.error || 'Ошибка авторизации');
+    try {
+      const res = await fetch(API_URLS.auth, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      
+      const data = await res.json();
+      
+      if (res.ok) {
+        setUser(data);
+        localStorage.setItem('user', JSON.stringify(data));
+        setUsername('');
+        setPassword('');
+        setEmail('');
+        setFullName('');
+        setInviteCode('');
+      } else {
+        alert(data.error || 'Ошибка авторизации');
+      }
+    } catch (err) {
+      alert('Ошибка соединения с сервером');
+      console.error(err);
     }
   };
 
@@ -174,7 +201,34 @@ const Index = () => {
       if (selectedHomework) {
         loadSubmissions(selectedHomework.id);
       }
-      alert('Оценка выставлена!');
+      alert('Оценка выставлена! Ученик получит результат автоматически.');
+    }
+  };
+
+  const submitHomework = async (homeworkId: number) => {
+    if (!submissionText.trim()) {
+      alert('Введите ответ!');
+      return;
+    }
+
+    const res = await fetch(API_URLS.homework, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Id': user?.id
+      },
+      body: JSON.stringify({
+        action: 'submit',
+        homework_id: homeworkId,
+        submission_type: 'text',
+        submission_data: submissionText
+      })
+    });
+    
+    if (res.ok) {
+      setSubmissionText('');
+      loadMySubmissions();
+      alert('Домашняя работа отправлена! Ждите проверки.');
     }
   };
 
@@ -287,6 +341,15 @@ const Index = () => {
               
               {!isLogin && (
                 <>
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Код приглашения</label>
+                    <Input 
+                      value={inviteCode}
+                      onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                      placeholder="Код от учителя"
+                      required
+                    />
+                  </div>
                   <div>
                     <label className="text-sm font-medium mb-2 block">Email</label>
                     <Input 
@@ -576,7 +639,7 @@ const Index = () => {
               </div>
             )}
 
-            {selectedHomework && user.is_admin ? (
+            {selectedHomework && user.is_admin && submissions.length > 0 ? (
               <div className="space-y-4">
                 <Button variant="ghost" onClick={() => {
                   setSelectedHomework(null);
@@ -650,7 +713,7 @@ const Index = () => {
                   </CardContent>
                 </Card>
               </div>
-            ) : (
+            ) : !selectedHomework ? (
               <div className="space-y-4">
                 {homework.map((hw) => {
                   const deadline = new Date(hw.deadline);
@@ -693,7 +756,7 @@ const Index = () => {
                               <Icon name="ArrowRight" size={16} className="ml-2" />
                             </Button>
                           ) : (
-                            <Button>
+                            <Button onClick={() => setSelectedHomework(hw)}>
                               Выполнить
                               <Icon name="ArrowRight" size={16} className="ml-2" />
                             </Button>
@@ -712,6 +775,64 @@ const Index = () => {
                     </CardContent>
                   </Card>
                 )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Button variant="ghost" onClick={() => setSelectedHomework(null)}>
+                  <Icon name="ArrowLeft" size={20} className="mr-2" />
+                  Назад к списку
+                </Button>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle>{selectedHomework.title}</CardTitle>
+                    <CardDescription>{selectedHomework.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {mySubmissions.find(s => s.homework_id === selectedHomework.id) ? (
+                        <div className="space-y-3">
+                          <div className="bg-primary/10 p-4 rounded-lg">
+                            <p className="font-semibold mb-2">✅ Работа сдана!</p>
+                            <p className="text-sm text-muted-foreground mb-2">
+                              Отправлено: {new Date(mySubmissions.find(s => s.homework_id === selectedHomework.id)?.submitted_at).toLocaleString('ru-RU')}
+                            </p>
+                            {mySubmissions.find(s => s.homework_id === selectedHomework.id)?.score !== null && (
+                              <div className="mt-3 p-3 bg-white rounded border">
+                                <p className="font-semibold text-lg mb-1">
+                                  Оценка: {mySubmissions.find(s => s.homework_id === selectedHomework.id)?.score}%
+                                </p>
+                                {mySubmissions.find(s => s.homework_id === selectedHomework.id)?.feedback && (
+                                  <div className="mt-2">
+                                    <p className="text-sm font-medium mb-1">Комментарий преподавателя:</p>
+                                    <p className="text-sm">{mySubmissions.find(s => s.homework_id === selectedHomework.id)?.feedback}</p>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            {mySubmissions.find(s => s.homework_id === selectedHomework.id)?.score === null && (
+                              <p className="text-sm text-muted-foreground">⏳ Ожидает проверки преподавателем</p>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <label className="text-sm font-medium">Ваш ответ:</label>
+                          <Textarea 
+                            value={submissionText}
+                            onChange={(e) => setSubmissionText(e.target.value)}
+                            placeholder="Введите ваш ответ здесь..."
+                            rows={8}
+                          />
+                          <Button onClick={() => submitHomework(selectedHomework.id)} className="w-full">
+                            Отправить работу
+                            <Icon name="Send" size={16} className="ml-2" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             )}
           </div>
@@ -774,6 +895,53 @@ const Index = () => {
               <h2 className="text-3xl font-bold mb-2">Панель администратора</h2>
               <p className="text-muted-foreground">Управление контентом платформы</p>
             </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Код приглашения для учеников</CardTitle>
+                <CardDescription>Дайте этот код ученикам для регистрации</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <div className="bg-primary/10 p-4 rounded-lg text-center">
+                      <p className="text-3xl font-bold text-primary tracking-wider">{inviteCode}</p>
+                    </div>
+                  </div>
+                  <Button onClick={generateInviteCode} variant="outline">
+                    <Icon name="RefreshCw" size={16} className="mr-2" />
+                    Новый код
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+        {currentView === 'admin' && user.is_admin && (
+          <div className="space-y-8">
+            <div>
+              <h2 className="text-3xl font-bold mb-2">Панель администратора</h2>
+              <p className="text-muted-foreground">Управление контентом платформы</p>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Код приглашения для учеников</CardTitle>
+                <CardDescription>Дайте этот код ученикам для регистрации</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <div className="bg-primary/10 p-4 rounded-lg text-center">
+                      <p className="text-3xl font-bold text-primary tracking-wider">{inviteCode}</p>
+                    </div>
+                  </div>
+                  <Button onClick={generateInviteCode} variant="outline">
+                    <Icon name="RefreshCw" size={16} className="mr-2" />
+                    Новый код
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
             <Card>
               <CardHeader>

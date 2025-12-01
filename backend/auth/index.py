@@ -92,6 +92,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             password = body.get('password')
             email = body.get('email')
             full_name = body.get('full_name')
+            invite_code = body.get('invite_code', '').upper()
+            
+            valid_codes = ['LENARELO', 'GEO2024', 'OGE2025']
+            if invite_code not in valid_codes:
+                return {
+                    'statusCode': 400,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'Неверный код приглашения. Попросите код у преподавателя.'}),
+                    'isBase64Encoded': False
+                }
             
             password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             
