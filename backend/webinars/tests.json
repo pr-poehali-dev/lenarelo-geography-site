@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "name": "Get all webinars",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    }
+  ]
+}

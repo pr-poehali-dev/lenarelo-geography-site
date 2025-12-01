@@ -1,0 +1,120 @@
+"""
+Business: Авторизация и регистрация пользователей
+Args: event - dict с httpMethod, body, queryStringParameters
+      context - object с attributes: request_id, function_name
+Returns: HTTP response dict
+"""
+import json
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import bcrypt
+from typing import Dict, Any
+
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    method: str = event.get('httpMethod', 'GET')
+    
+    if method == 'OPTIONS':
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, X-User-Id, X-Auth-Token',
+                'Access-Control-Max-Age': '86400'
+            },
+            'body': '',
+            'isBase64Encoded': False
+        }
+    
+    database_url = os.environ.get('DATABASE_URL')
+    
+    if method == 'POST':
+        body = json.loads(event.get('body', '{}'))
+        action = body.get('action')
+        
+        if action == 'login':
+            username = body.get('username')
+            password = body.get('password')
+            
+            conn = psycopg2.connect(database_url)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            
+            cur.execute(
+                "SELECT id, username, password_hash, email, full_name, is_admin FROM users WHERE username = %s",
+                (username,)
+            )
+            user = cur.fetchone()
+            
+            cur.close()
+            conn.close()
+            
+            if not user:
+                return {
+                    'statusCode': 401,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'Неверный логин или пароль'}),
+                    'isBase64Encoded': False
+                }
+            
+            if bcrypt.checkpw(password.encode('utf-8'), user['password_hash'].encode('utf-8')):
+                return {
+                    'statusCode': 200,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({
+                        'id': user['id'],
+                        'username': user['username'],
+                        'email': user['email'],
+                        'full_name': user['full_name'],
+                        'is_admin': user['is_admin']
+                    }),
+                    'isBase64Encoded': False
+                }
+            else:
+                return {
+                    'statusCode': 401,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'Неверный логин или пароль'}),
+                    'isBase64Encoded': False
+                }
+        
+        elif action == 'register':
+            username = body.get('username')
+            password = body.get('password')
+            email = body.get('email')
+            full_name = body.get('full_name')
+            
+            password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            
+            conn = psycopg2.connect(database_url)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            
+            cur.execute(
+                "INSERT INTO users (username, password_hash, email, full_name, is_admin) VALUES (%s, %s, %s, %s, FALSE) RETURNING id, username, email, full_name, is_admin",
+                (username, password_hash, email, full_name)
+            )
+            user = cur.fetchone()
+            conn.commit()
+            
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({
+                    'id': user['id'],
+                    'username': user['username'],
+                    'email': user['email'],
+                    'full_name': user['full_name'],
+                    'is_admin': user['is_admin']
+                }),
+                'isBase64Encoded': False
+            }
+    
+    return {
+        'statusCode': 405,
+        'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+        'body': json.dumps({'error': 'Method not allowed'}),
+        'isBase64Encoded': False
+    }

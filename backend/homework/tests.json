@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "name": "Get homework list",
+      "method": "GET",
+      "path": "/?action=list",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
