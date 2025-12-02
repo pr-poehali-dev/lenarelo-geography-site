@@ -529,9 +529,23 @@ const Index = () => {
 
         {currentView === 'webinars' && (
           <div className="space-y-6">
-            <div>
-              <h2 className="text-3xl font-bold mb-2">Вебинары</h2>
-              <p className="text-muted-foreground">Смотрите обучающие видео</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-bold mb-2">Вебинары</h2>
+                <p className="text-muted-foreground">Смотрите обучающие видео</p>
+              </div>
+              {(user.is_teacher || user.is_admin) && (
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setCurrentView('homework')}>
+                    <Icon name="BookOpen" size={18} className="mr-2" />
+                    К Домашке
+                  </Button>
+                  <Button variant="outline" onClick={() => setCurrentView('admin')}>
+                    <Icon name="BarChart3" size={18} className="mr-2" />
+                    Статистика
+                  </Button>
+                </div>
+              )}
             </div>
 
             {selectedWebinar ? (
@@ -603,9 +617,23 @@ const Index = () => {
 
         {currentView === 'homework' && (
           <div className="space-y-6">
-            <div>
-              <h2 className="text-3xl font-bold mb-2">Домашние задания</h2>
-              <p className="text-muted-foreground">Выполняйте задания в срок</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-bold mb-2">Домашние задания</h2>
+                <p className="text-muted-foreground">Выполняйте задания в срок</p>
+              </div>
+              {(user.is_teacher || user.is_admin) && (
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setCurrentView('webinars')}>
+                    <Icon name="Video" size={18} className="mr-2" />
+                    К Вебинарам
+                  </Button>
+                  <Button variant="outline" onClick={() => setCurrentView('admin')}>
+                    <Icon name="BarChart3" size={18} className="mr-2" />
+                    Статистика
+                  </Button>
+                </div>
+              )}
             </div>
 
             {homeworkStats && (
@@ -892,8 +920,47 @@ const Index = () => {
         {currentView === 'admin' && user.is_admin && (
           <div className="space-y-8">
             <div>
-              <h2 className="text-3xl font-bold mb-2">Панель администратора</h2>
-              <p className="text-muted-foreground">Управление контентом платформы</p>
+              <h2 className="text-3xl font-bold mb-2">Панель {user.is_teacher ? 'учителя' : 'администратора'}</h2>
+              <p className="text-muted-foreground">Управление контентом и статистика учеников</p>
+            </div>
+
+            <div className="grid md:grid-cols-4 gap-4">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center">
+                    <Icon name="Users" size={32} className="mx-auto text-primary mb-2" />
+                    <p className="text-3xl font-bold text-primary">{submissions.length}</p>
+                    <p className="text-sm text-muted-foreground">Всего учеников</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center">
+                    <Icon name="Video" size={32} className="mx-auto text-primary mb-2" />
+                    <p className="text-3xl font-bold text-primary">{webinars.length}</p>
+                    <p className="text-sm text-muted-foreground">Вебинаров создано</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center">
+                    <Icon name="BookOpen" size={32} className="mx-auto text-primary mb-2" />
+                    <p className="text-3xl font-bold text-primary">{homework.length}</p>
+                    <p className="text-sm text-muted-foreground">Заданий активно</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center">
+                    <Icon name="CheckCircle" size={32} className="mx-auto text-primary mb-2" />
+                    <p className="text-3xl font-bold text-primary">{mySubmissions.length}</p>
+                    <p className="text-sm text-muted-foreground">Работ проверено</p>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
             <Card>
@@ -1040,7 +1107,10 @@ const Index = () => {
                   <div>
                     <h3 className="text-xl font-semibold">{user.full_name || user.username}</h3>
                     <p className="text-muted-foreground">{user.email}</p>
-                    {user.is_admin && <Badge className="mt-2">Администратор</Badge>}
+                    <div className="flex gap-2 mt-2">
+                      {user.is_admin && <Badge>Администратор</Badge>}
+                      {user.is_teacher && <Badge variant="secondary">Учитель</Badge>}
+                    </div>
                   </div>
                 </div>
               </CardContent>

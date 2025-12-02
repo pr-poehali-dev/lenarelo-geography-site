@@ -51,7 +51,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             username_escaped = username.replace("'", "''")
             cur.execute(
-                f"SELECT id, username, password_hash, email, full_name, is_admin FROM users WHERE username = '{username_escaped}'"
+                f"SELECT id, username, password_hash, email, full_name, is_admin, is_teacher FROM users WHERE username = '{username_escaped}'"
             )
             user = cur.fetchone()
             
@@ -75,7 +75,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         'username': user['username'],
                         'email': user['email'],
                         'full_name': user['full_name'],
-                        'is_admin': user['is_admin']
+                        'is_admin': user['is_admin'],
+                        'is_teacher': user.get('is_teacher', False)
                     }),
                     'isBase64Encoded': False
                 }
@@ -114,7 +115,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 email_escaped = email.replace("'", "''")
                 full_name_escaped = full_name.replace("'", "''")
                 cur.execute(
-                    f"INSERT INTO users (username, password_hash, email, full_name, is_admin) VALUES ('{username_escaped}', '{password_hash_escaped}', '{email_escaped}', '{full_name_escaped}', FALSE) RETURNING id, username, email, full_name, is_admin"
+                    f"INSERT INTO users (username, password_hash, email, full_name, is_admin, is_teacher) VALUES ('{username_escaped}', '{password_hash_escaped}', '{email_escaped}', '{full_name_escaped}', FALSE, FALSE) RETURNING id, username, email, full_name, is_admin, is_teacher"
                 )
                 user = cur.fetchone()
                 conn.commit()
@@ -130,7 +131,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         'username': user['username'],
                         'email': user['email'],
                         'full_name': user['full_name'],
-                        'is_admin': user['is_admin']
+                        'is_admin': user['is_admin'],
+                        'is_teacher': user.get('is_teacher', False)
                     }),
                     'isBase64Encoded': False
                 }
