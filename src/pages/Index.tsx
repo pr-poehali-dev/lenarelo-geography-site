@@ -36,12 +36,22 @@ const Index = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   
   const [newWebinar, setNewWebinar] = useState({ title: '', description: '', video_url: '', duration: 0 });
+  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [newHomework, setNewHomework] = useState({
     title: '',
     description: '',
     homework_type: 'text',
-    deadline: ''
+    deadline: '',
+    max_score: 1
   });
+  const [testQuestions, setTestQuestions] = useState<any[]>([]);
+  const [currentQuestion, setCurrentQuestion] = useState({
+    question: '',
+    options: ['', '', '', ''],
+    correct: 0
+  });
+  const [loadedTestQuestions, setLoadedTestQuestions] = useState<any[]>([]);
+  const [testAnswers, setTestAnswers] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -166,17 +176,28 @@ const Index = () => {
   const createHomework = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (newHomework.homework_type === 'test' && testQuestions.length === 0) {
+      alert('Добавьте хотя бы один вопрос для теста!');
+      return;
+    }
+    
     const res = await fetch(API_URLS.homework, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-User-Id': user?.id
       },
-      body: JSON.stringify({ action: 'create', ...newHomework })
+      body: JSON.stringify({ 
+        action: 'create', 
+        ...newHomework,
+        questions: newHomework.homework_type === 'test' ? testQuestions : []
+      })
     });
     
     if (res.ok) {
-      setNewHomework({ title: '', description: '', homework_type: 'text', deadline: '' });
+      setNewHomework({ title: '', description: '', homework_type: 'text', deadline: '', max_score: 1 });
+      setTestQuestions([]);
+      setCurrentQuestion({ question: '', options: ['', '', '', ''], correct: 0 });
       loadHomework();
       alert('Домашнее задание создано!');
     }
@@ -205,7 +226,49 @@ const Index = () => {
     }
   };
 
-  const submitHomework = async (homeworkId: number) => {
+  const loadTestQuestions = async (homeworkId: number) => {
+    const res = await fetch(API_URLS.homework + `?action=get_questions&homework_id=${homeworkId}`);
+    if (res.ok) {
+      const questions = await res.json();
+      setLoadedTestQuestions(questions);
+    }
+  };
+
+  const submitHomework = async (homeworkId: number, hwType: string = 'text') => {
+    if (hwType === 'test') {
+      if (Object.keys(testAnswers).length !== loadedTestQuestions.length) {
+        alert('Ответьте на все вопросы теста!');
+        return;
+      }
+      
+      const res = await fetch(API_URLS.homework, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Id': user?.id
+        },
+        body: JSON.stringify({
+          action: 'submit',
+          homework_id: homeworkId,
+          submission_type: 'test',
+          submission_data: testAnswers
+        })
+      });
+      
+      if (res.ok) {
+        const result = await res.json();
+        setTestAnswers({});
+        setLoadedTestQuestions([]);
+        loadMySubmissions();
+        if (result.score !== null && result.score !== undefined) {
+          alert(`Тест проверен автоматически! Ваш результат: ${result.score} из ${selectedHomework?.max_score || 1}`);
+        } else {
+          alert('Тест отправлен!');
+        }
+      }
+      return;
+    }
+    
     if (!submissionText.trim()) {
       alert('Введите ответ!');
       return;
@@ -446,13 +509,13 @@ const Index = () => {
                 <Icon name="Calendar" size={18} className="mr-2" />
                 Расписание
               </Button>
-              {user.is_admin && (
+              {(user.is_admin || user.is_teacher) && (
                 <Button 
                   variant={currentView === 'admin' ? 'default' : 'ghost'}
                   onClick={() => setCurrentView('admin')}
                 >
                   <Icon name="Settings" size={18} className="mr-2" />
-                  Админ
+                  {user.is_teacher ? 'Управление' : 'Админ'}
                 </Button>
               )}
               <Button 
@@ -828,8 +891,11 @@ const Index = () => {
                             {mySubmissions.find(s => s.homework_id === selectedHomework.id)?.score !== null && (
                               <div className="mt-3 p-3 bg-white rounded border">
                                 <p className="font-semibold text-lg mb-1">
-                                  Оценка: {mySubmissions.find(s => s.homework_id === selectedHomework.id)?.score}%
+                                  Оценка: {mySubmissions.find(s => s.homework_id === selectedHomework.id)?.score} из {selectedHomework.max_score || 1}
                                 </p>
+                                {mySubmissions.find(s => s.homework_id === selectedHomework.id)?.is_auto_graded && (
+                                  <Badge variant="secondary" className="mb-2">Автоматическая проверка</Badge>
+                                )}
                                 {mySubmissions.find(s => s.homework_id === selectedHomework.id)?.feedback && (
                                   <div className="mt-2">
                                     <p className="text-sm font-medium mb-1">Комментарий преподавателя:</p>
@@ -843,6 +909,59 @@ const Index = () => {
                             )}
                           </div>
                         </div>
+                      ) : selectedHomework.homework_type === 'test' ? (
+                        <div className="space-y-4">
+                          {loadedTestQuestions.length === 0 ? (
+                            <Button onClick={() => loadTestQuestions(selectedHomework.id)} className="w-full">
+                              Начать тест
+                              <Icon name="PlayCircle" size={16} className="ml-2" />
+                            </Button>
+                          ) : (
+                            <>
+                              <div className="bg-primary/5 p-4 rounded-lg mb-4">
+                                <p className="text-sm font-medium">Тест: {loadedTestQuestions.length} вопросов</p>
+                                <p className="text-sm text-muted-foreground">Макс. балл: {selectedHomework.max_score}</p>
+                              </div>
+                              
+                              {loadedTestQuestions.map((q, idx) => {
+                                const options = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
+                                return (
+                                  <Card key={q.id} className="border-2">
+                                    <CardContent className="pt-6">
+                                      <p className="font-medium mb-3">{idx + 1}. {q.question_text}</p>
+                                      <div className="space-y-2">
+                                        {options.map((opt: string, optIdx: number) => (
+                                          <label 
+                                            key={optIdx}
+                                            className={`flex items-center gap-3 p-3 border-2 rounded-lg cursor-pointer transition-all ${testAnswers[q.id] === optIdx ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}
+                                          >
+                                            <input 
+                                              type="radio"
+                                              name={`question-${q.id}`}
+                                              checked={testAnswers[q.id] === optIdx}
+                                              onChange={() => setTestAnswers({...testAnswers, [q.id]: optIdx})}
+                                              className="w-4 h-4"
+                                            />
+                                            <span>{opt}</span>
+                                          </label>
+                                        ))}
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                );
+                              })}
+                              
+                              <Button 
+                                onClick={() => submitHomework(selectedHomework.id, 'test')} 
+                                className="w-full"
+                                disabled={Object.keys(testAnswers).length !== loadedTestQuestions.length}
+                              >
+                                Отправить тест ({Object.keys(testAnswers).length} / {loadedTestQuestions.length})
+                                <Icon name="Send" size={16} className="ml-2" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       ) : (
                         <div className="space-y-3">
                           <label className="text-sm font-medium">Ваш ответ:</label>
@@ -852,7 +971,7 @@ const Index = () => {
                             placeholder="Введите ваш ответ здесь..."
                             rows={8}
                           />
-                          <Button onClick={() => submitHomework(selectedHomework.id)} className="w-full">
+                          <Button onClick={() => submitHomework(selectedHomework.id, 'text')} className="w-full">
                             Отправить работу
                             <Icon name="Send" size={16} className="ml-2" />
                           </Button>
@@ -917,7 +1036,7 @@ const Index = () => {
           </div>
         )}
 
-        {currentView === 'admin' && user.is_admin && (
+        {currentView === 'admin' && (user.is_admin || user.is_teacher) && (
           <div className="space-y-8">
             <div>
               <h2 className="text-3xl font-bold mb-2">Панель {user.is_teacher ? 'учителя' : 'администратора'}</h2>
@@ -1009,13 +1128,44 @@ const Index = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Ссылка на видео (YouTube embed)</label>
+                    <label className="text-sm font-medium mb-2 block">Ссылка на видео (YouTube embed) или загрузить файл</label>
                     <Input 
                       value={newWebinar.video_url}
                       onChange={(e) => setNewWebinar({...newWebinar, video_url: e.target.value})}
                       placeholder="https://www.youtube.com/embed/..."
-                      required
+                      disabled={videoFile !== null}
                     />
+                    <div className="mt-2">
+                      <label className="flex items-center gap-2 cursor-pointer border-2 border-dashed rounded-lg p-3 hover:bg-muted/50 transition-colors">
+                        <Icon name="Upload" size={20} className="text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">
+                          {videoFile ? videoFile.name : 'Или загрузите видео с устройства'}
+                        </span>
+                        <input 
+                          type="file"
+                          accept="video/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              setVideoFile(e.target.files[0]);
+                              setNewWebinar({...newWebinar, video_url: ''});
+                            }
+                          }}
+                        />
+                      </label>
+                      {videoFile && (
+                        <Button 
+                          type="button"
+                          size="sm" 
+                          variant="ghost" 
+                          className="mt-2"
+                          onClick={() => setVideoFile(null)}
+                        >
+                          <Icon name="X" size={14} className="mr-1" />
+                          Удалить файл
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="text-sm font-medium mb-2 block">Длительность (минуты)</label>
@@ -1081,9 +1231,92 @@ const Index = () => {
                       required
                     />
                   </div>
-                  <Button type="submit" className="w-full">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Максимальный балл</label>
+                    <Input 
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={newHomework.max_score}
+                      onChange={(e) => setNewHomework({...newHomework, max_score: parseInt(e.target.value)})}
+                      placeholder="1 или 2 балла"
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">За какое задание: 1 или 2 балла</p>
+                  </div>
+                  
+                  {newHomework.homework_type === 'test' && (
+                    <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium">Вопросы теста ({testQuestions.length})</label>
+                        <Button type="button" size="sm" variant="outline" onClick={() => {
+                          if (currentQuestion.question && currentQuestion.options.every(o => o)) {
+                            setTestQuestions([...testQuestions, {...currentQuestion}]);
+                            setCurrentQuestion({ question: '', options: ['', '', '', ''], correct: 0 });
+                          } else {
+                            alert('Заполните вопрос и все варианты ответов');
+                          }
+                        }}>
+                          <Icon name="Plus" size={14} className="mr-1" />
+                          Добавить вопрос
+                        </Button>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <Input 
+                          placeholder="Текст вопроса"
+                          value={currentQuestion.question}
+                          onChange={(e) => setCurrentQuestion({...currentQuestion, question: e.target.value})}
+                        />
+                        {currentQuestion.options.map((opt, idx) => (
+                          <div key={idx} className="flex gap-2">
+                            <Input 
+                              placeholder={`Вариант ${idx + 1}`}
+                              value={opt}
+                              onChange={(e) => {
+                                const newOpts = [...currentQuestion.options];
+                                newOpts[idx] = e.target.value;
+                                setCurrentQuestion({...currentQuestion, options: newOpts});
+                              }}
+                            />
+                            <Button 
+                              type="button"
+                              size="sm"
+                              variant={currentQuestion.correct === idx ? 'default' : 'outline'}
+                              onClick={() => setCurrentQuestion({...currentQuestion, correct: idx})}
+                            >
+                              {currentQuestion.correct === idx ? '✓ Верно' : 'Отметить'}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      {testQuestions.length > 0 && (
+                        <div className="pt-2 border-t">
+                          <p className="text-sm font-medium mb-2">Добавленные вопросы:</p>
+                          <div className="space-y-2">
+                            {testQuestions.map((q, idx) => (
+                              <div key={idx} className="text-sm bg-white p-2 rounded flex justify-between items-center">
+                                <span>{idx + 1}. {q.question}</span>
+                                <Button 
+                                  type="button"
+                                  size="sm" 
+                                  variant="ghost"
+                                  onClick={() => setTestQuestions(testQuestions.filter((_, i) => i !== idx))}
+                                >
+                                  <Icon name="X" size={14} />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  <Button type="submit" className="w-full" disabled={newHomework.homework_type === 'test' && testQuestions.length === 0}>
                     <Icon name="Plus" size={16} className="mr-2" />
-                    Создать задание
+                    Создать задание {newHomework.homework_type === 'test' && `(${testQuestions.length} вопросов)`}
                   </Button>
                 </form>
               </CardContent>
