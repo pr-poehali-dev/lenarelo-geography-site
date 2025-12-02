@@ -51,16 +51,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         headers = event.get('headers', {})
         user_id = headers.get('x-user-id') or headers.get('X-User-Id')
         
-        title = body.get('title')
-        description = body.get('description')
-        video_url = body.get('video_url')
-        thumbnail_url = body.get('thumbnail_url')
-        duration = body.get('duration')
+        title = body.get('title', '').replace("'", "''")
+        description = body.get('description', '').replace("'", "''")
+        video_url = body.get('video_url', '').replace("'", "''")
+        thumbnail_url = body.get('thumbnail_url', '').replace("'", "''") if body.get('thumbnail_url') else 'NULL'
+        duration = int(body.get('duration', 0))
         
-        cur.execute(
-            "INSERT INTO webinars (title, description, video_url, thumbnail_url, duration, created_by) VALUES (%s, %s, %s, %s, %s, %s) RETURNING *",
-            (title, description, video_url, thumbnail_url, duration, user_id)
-        )
+        if thumbnail_url == 'NULL':
+            cur.execute(
+                f"INSERT INTO webinars (title, description, video_url, thumbnail_url, duration, created_by) VALUES ('{title}', '{description}', '{video_url}', NULL, {duration}, {user_id}) RETURNING *"
+            )
+        else:
+            cur.execute(
+                f"INSERT INTO webinars (title, description, video_url, thumbnail_url, duration, created_by) VALUES ('{title}', '{description}', '{video_url}', '{thumbnail_url}', {duration}, {user_id}) RETURNING *"
+            )
         webinar = cur.fetchone()
         conn.commit()
         

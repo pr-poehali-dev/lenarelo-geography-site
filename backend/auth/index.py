@@ -1,5 +1,5 @@
 """
-Business: Авторизация и регистрация пользователей
+Business: Авторизация и регистрация пользователей с Simple Query Protocol
 Args: event - dict с httpMethod, body, queryStringParameters
       context - object с attributes: request_id, function_name
 Returns: HTTP response dict
@@ -49,9 +49,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             conn = psycopg2.connect(database_url)
             cur = conn.cursor(cursor_factory=RealDictCursor)
             
+            username_escaped = username.replace("'", "''")
             cur.execute(
-                "SELECT id, username, password_hash, email, full_name, is_admin FROM users WHERE username = %s",
-                (username,)
+                f"SELECT id, username, password_hash, email, full_name, is_admin FROM users WHERE username = '{username_escaped}'"
             )
             user = cur.fetchone()
             
@@ -109,9 +109,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             cur = conn.cursor(cursor_factory=RealDictCursor)
             
             try:
+                username_escaped = username.replace("'", "''")
+                password_hash_escaped = password_hash.replace("'", "''")
+                email_escaped = email.replace("'", "''")
+                full_name_escaped = full_name.replace("'", "''")
                 cur.execute(
-                    "INSERT INTO users (username, password_hash, email, full_name, is_admin) VALUES (%s, %s, %s, %s, FALSE) RETURNING id, username, email, full_name, is_admin",
-                    (username, password_hash, email, full_name)
+                    f"INSERT INTO users (username, password_hash, email, full_name, is_admin) VALUES ('{username_escaped}', '{password_hash_escaped}', '{email_escaped}', '{full_name_escaped}', FALSE) RETURNING id, username, email, full_name, is_admin"
                 )
                 user = cur.fetchone()
                 conn.commit()

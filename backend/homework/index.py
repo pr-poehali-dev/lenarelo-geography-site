@@ -53,13 +53,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         elif action == 'submissions':
             homework_id = params.get('homework_id')
             
-            cur.execute("""
+            homework_id_int = int(homework_id)
+            cur.execute(f"""
                 SELECT hs.*, u.full_name as student_name, u.username
                 FROM homework_submissions hs
                 LEFT JOIN users u ON hs.user_id = u.id
-                WHERE hs.homework_id = %s
+                WHERE hs.homework_id = {homework_id_int}
                 ORDER BY hs.submitted_at DESC
-            """, (homework_id,))
+            """)
             
             submissions = cur.fetchall()
             
@@ -77,14 +78,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             headers = event.get('headers', {})
             user_id = headers.get('x-user-id') or headers.get('X-User-Id')
             
-            cur.execute("""
+            user_id_int = int(user_id)
+            cur.execute(f"""
                 SELECT 
                     COUNT(DISTINCT h.id) as total_homework,
                     COUNT(DISTINCT hs.homework_id) as submitted_homework,
                     AVG(hs.score) as average_score
                 FROM homework h
-                LEFT JOIN homework_submissions hs ON h.id = hs.homework_id AND hs.user_id = %s
-            """, (user_id,))
+                LEFT JOIN homework_submissions hs ON h.id = hs.homework_id AND hs.user_id = {user_id_int}
+            """)
             
             stats = cur.fetchone()
             
@@ -102,13 +104,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             headers = event.get('headers', {})
             user_id = headers.get('x-user-id') or headers.get('X-User-Id')
             
-            cur.execute("""
+            user_id_int = int(user_id)
+            cur.execute(f"""
                 SELECT hs.*, h.title as homework_title
                 FROM homework_submissions hs
                 LEFT JOIN homework h ON hs.homework_id = h.id
-                WHERE hs.user_id = %s
+                WHERE hs.user_id = {user_id_int}
                 ORDER BY hs.submitted_at DESC
-            """, (user_id,))
+            """)
             
             submissions = cur.fetchall()
             
@@ -135,18 +138,25 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             deadline = body.get('deadline')
             questions = body.get('questions', [])
             
+            title_esc = title.replace("'", "''")
+            description_esc = description.replace("'", "''")
+            homework_type_esc = homework_type.replace("'", "''")
+            deadline_esc = deadline.replace("'", "''")
+            user_id_int = int(user_id)
+            
             cur.execute(
-                "INSERT INTO homework (title, description, homework_type, deadline, created_by) VALUES (%s, %s, %s, %s, %s) RETURNING *",
-                (title, description, homework_type, deadline, user_id)
+                f"INSERT INTO homework (title, description, homework_type, deadline, created_by) VALUES ('{title_esc}', '{description_esc}', '{homework_type_esc}', '{deadline_esc}', {user_id_int}) RETURNING *"
             )
             homework = cur.fetchone()
             homework_id = homework['id']
             
             if homework_type == 'test' and questions:
                 for idx, q in enumerate(questions):
+                    question_esc = q.get('question', '').replace("'", "''")
+                    options_json = json.dumps(q.get('options')).replace("'", "''")
+                    correct_esc = q.get('correct', '').replace("'", "''")
                     cur.execute(
-                        "INSERT INTO homework_questions (homework_id, question_text, options, correct_answer, order_num) VALUES (%s, %s, %s, %s, %s)",
-                        (homework_id, q.get('question'), json.dumps(q.get('options')), q.get('correct'), idx)
+                        f"INSERT INTO homework_questions (homework_id, question_text, options, correct_answer, order_num) VALUES ({homework_id}, '{question_esc}', '{options_json}', '{correct_esc}', {idx})"
                     )
             
             conn.commit()
@@ -166,10 +176,28 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             submission_data = body.get('submission_data')
             file_url = body.get('file_url')
             
-            cur.execute(
-                "INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url) VALUES (%s, %s, %s, %s, %s) RETURNING *",
-                (homework_id, user_id, submission_type, json.dumps(submission_data) if submission_data else None, file_url)
-            )
+            homework_id_int = int(homework_id)
+            user_id_int = int(user_id)
+            submission_type_esc = submission_type.replace("'", "''")
+            submission_data_json = json.dumps(submission_data).replace("'", "''") if submission_data else 'NULL'
+            file_url_esc = file_url.replace("'", "''") if file_url else 'NULL'
+            
+            if submission_data_json == 'NULL' and file_url_esc == 'NULL':
+                cur.execute(
+                    f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', NULL, NULL) RETURNING *"
+                )
+            elif submission_data_json == 'NULL':
+                cur.execute(
+                    f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', NULL, '{file_url_esc}') RETURNING *"
+                )
+            elif file_url_esc == 'NULL':
+                cur.execute(
+                    f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', '{submission_data_json}', NULL) RETURNING *"
+                )
+            else:
+                cur.execute(
+                    f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', '{submission_data_json}', '{file_url_esc}') RETURNING *"
+                )
             submission = cur.fetchone()
             conn.commit()
             
@@ -188,10 +216,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             score = body.get('score')
             feedback = body.get('feedback', '')
             
-            cur.execute(
-                "UPDATE homework_submissions SET score = %s, feedback = %s WHERE id = %s RETURNING *",
-                (score, feedback, submission_id)
-            )
+            score_val = int(score) if score else 'NULL'
+            feedback_esc = feedback.replace("'", "''")
+            submission_id_int = int(submission_id)
+            
+            if score_val == 'NULL':
+                cur.execute(
+                    f"UPDATE homework_submissions SET score = NULL, feedback = '{feedback_esc}' WHERE id = {submission_id_int} RETURNING *"
+                )
+            else:
+                cur.execute(
+                    f"UPDATE homework_submissions SET score = {score_val}, feedback = '{feedback_esc}' WHERE id = {submission_id_int} RETURNING *"
+                )
             submission = cur.fetchone()
             conn.commit()
             
