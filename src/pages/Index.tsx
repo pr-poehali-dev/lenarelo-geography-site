@@ -737,13 +737,24 @@ const Index = () => {
                     <div className="aspect-video bg-black rounded-lg mb-4">
                       {selectedWebinar.video_url ? (
                         <iframe
-                          src={selectedWebinar.video_url.includes('youtube.com/watch?v=') 
-                            ? selectedWebinar.video_url.replace('watch?v=', 'embed/').split('&')[0]
-                            : selectedWebinar.video_url}
+                          src={(() => {
+                            const url = selectedWebinar.video_url;
+                            if (url.includes('youtube.com/watch?v=')) {
+                              const videoId = url.split('v=')[1].split('&')[0];
+                              return `https://www.youtube.com/embed/${videoId}`;
+                            }
+                            if (url.includes('youtu.be/')) {
+                              const videoId = url.split('youtu.be/')[1].split('?')[0];
+                              return `https://www.youtube.com/embed/${videoId}`;
+                            }
+                            if (url.includes('youtube.com/embed/')) {
+                              return url;
+                            }
+                            return url;
+                          })()}
                           className="w-full h-full rounded-lg"
                           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                           allowFullScreen
-                          frameBorder="0"
                           title={selectedWebinar.title}
                         />
                       ) : (
