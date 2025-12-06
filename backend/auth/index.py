@@ -95,8 +95,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             full_name = body.get('full_name')
             invite_code = body.get('invite_code', '').upper()
             
-            valid_codes = ['LENARELO', 'GEO2024', 'OGE2025']
-            if invite_code not in valid_codes:
+            conn = psycopg2.connect(database_url)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            
+            code_escaped = invite_code.replace("'", "''")
+            cur.execute(f"SELECT id FROM invite_codes WHERE code = '{code_escaped}' AND is_active = TRUE")
+            code_result = cur.fetchone()
+            
+            if not code_result:
+                cur.close()
+                conn.close()
                 return {
                     'statusCode': 400,
                     'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
@@ -104,10 +112,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'isBase64Encoded': False
                 }
             
-            password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            cur.execute(f"UPDATE invite_codes SET usage_count = usage_count + 1 WHERE code = '{code_escaped}'")
             
-            conn = psycopg2.connect(database_url)
-            cur = conn.cursor(cursor_factory=RealDictCursor)
+            password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             
             try:
                 username_escaped = username.replace("'", "''")
@@ -119,7 +126,6 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 )
                 user = cur.fetchone()
                 conn.commit()
-                
                 cur.close()
                 conn.close()
                 
@@ -146,6 +152,74 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'body': json.dumps({'error': 'Пользователь с таким логином или email уже существует'}),
                     'isBase64Encoded': False
                 }
+        
+        elif action == 'generate_code':
+            user_id = event.get('headers', {}).get('X-User-Id')
+            if not user_id:
+                return {
+                    'statusCode': 401,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'Unauthorized'}),
+                    'isBase64Encoded': False
+                }
+            
+            conn = psycopg2.connect(database_url)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            
+            cur.execute(f"SELECT is_admin FROM users WHERE id = {user_id}")
+            user_check = cur.fetchone()
+            
+            if not user_check or not user_check['is_admin']:
+                cur.close()
+                conn.close()
+                return {
+                    'statusCode': 403,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'Forbidden'}),
+                    'isBase64Encoded': False
+                }
+            
+            import random
+            import string
+            new_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+            
+            cur.execute(f"INSERT INTO invite_codes (code, created_by, is_active) VALUES ('{new_code}', {user_id}, TRUE) RETURNING code")
+            result = cur.fetchone()
+            conn.commit()
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'code': result['code']}),
+                'isBase64Encoded': False
+            }
+        
+        elif action == 'get_codes':
+            user_id = event.get('headers', {}).get('X-User-Id')
+            if not user_id:
+                return {
+                    'statusCode': 401,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'Unauthorized'}),
+                    'isBase64Encoded': False
+                }
+            
+            conn = psycopg2.connect(database_url)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            
+            cur.execute("SELECT code, is_active, usage_count, created_at FROM invite_codes ORDER BY created_at DESC")
+            codes = cur.fetchall()
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps([dict(c) for c in codes], default=str),
+                'isBase64Encoded': False
+            }
     
     return {
         'statusCode': 405,

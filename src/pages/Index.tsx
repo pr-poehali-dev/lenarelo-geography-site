@@ -1,15 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import Icon from '@/components/ui/icon';
+import SnowEffect from '@/components/SnowEffect';
+import Calendar from '@/components/Calendar';
 
 const API_URLS = {
   auth: 'https://functions.poehali.dev/d06cbbbe-85c4-47b7-b4fe-3b3eadd35afa',
   webinars: 'https://functions.poehali.dev/b6dc4885-1026-499a-b7f6-33332b53b4ad',
   homework: 'https://functions.poehali.dev/cf2a3e0a-655d-46e4-886a-4cd3ed91833a',
+  schedule: 'https://functions.poehali.dev/9c9afb3d-8f43-4fd6-815a-3afdc306de0c',
 };
 
 const Index = () => {
@@ -52,6 +55,26 @@ const Index = () => {
   });
   const [loadedTestQuestions, setLoadedTestQuestions] = useState<any[]>([]);
   const [testAnswers, setTestAnswers] = useState<Record<string, number>>({});
+  const [scheduleItems, setScheduleItems] = useState<any[]>([]);
+  const [inviteCodes, setInviteCodes] = useState<any[]>([]);
+  const [webinarFilter, setWebinarFilter] = useState('');
+  const [homeworkFilter, setHomeworkFilter] = useState('');
+
+  const filteredWebinars = useMemo(() => {
+    if (!webinarFilter) return webinars;
+    return webinars.filter(w => 
+      w.title.toLowerCase().includes(webinarFilter.toLowerCase()) ||
+      w.description.toLowerCase().includes(webinarFilter.toLowerCase())
+    );
+  }, [webinars, webinarFilter]);
+
+  const filteredHomework = useMemo(() => {
+    if (!homeworkFilter) return homework;
+    return homework.filter(hw => 
+      hw.title.toLowerCase().includes(homeworkFilter.toLowerCase()) ||
+      hw.description.toLowerCase().includes(homeworkFilter.toLowerCase())
+    );
+  }, [homework, homeworkFilter]);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
@@ -66,14 +89,85 @@ const Index = () => {
       loadHomework();
       loadHomeworkStats();
       loadMySubmissions();
+      loadSchedule();
       if (user.is_admin) {
-        generateInviteCode();
+        loadInviteCodes();
       }
     }
   }, [user]);
 
-  const generateInviteCode = () => {
-    setInviteCode(Math.random().toString(36).substring(2, 10).toUpperCase());
+  const generateInviteCode = async () => {
+    try {
+      const res = await fetch(API_URLS.auth, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Id': user?.id
+        },
+        body: JSON.stringify({ action: 'generate_code' })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setInviteCode(data.code);
+        loadInviteCodes();
+      }
+    } catch (err) {
+      console.error('Failed to generate code:', err);
+    }
+  };
+
+  const loadInviteCodes = async () => {
+    try {
+      const res = await fetch(API_URLS.auth, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Id': user?.id
+        },
+        body: JSON.stringify({ action: 'get_codes' })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setInviteCodes(data);
+      }
+    } catch (err) {
+      console.error('Failed to load codes:', err);
+    }
+  };
+
+  const loadSchedule = async () => {
+    try {
+      const res = await fetch(API_URLS.schedule);
+      if (res.ok) {
+        const data = await res.json();
+        setScheduleItems(data);
+      }
+    } catch (err) {
+      console.error('Failed to load schedule:', err);
+    }
+  };
+
+  const addScheduleEvent = async (date: Date, title: string, description: string, time: string) => {
+    try {
+      const res = await fetch(API_URLS.schedule, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Id': user?.id
+        },
+        body: JSON.stringify({
+          date: date.toISOString().split('T')[0],
+          title,
+          description,
+          time
+        })
+      });
+      if (res.ok) {
+        loadSchedule();
+      }
+    } catch (err) {
+      console.error('Failed to add event:', err);
+    }
   };
 
   const loadMySubmissions = async () => {
@@ -149,9 +243,12 @@ const Index = () => {
   };
 
   const loadSubmissions = async (homeworkId: number) => {
-    const res = await fetch(API_URLS.homework + `?action=submissions&homework_id=${homeworkId}`);
+    const res = await fetch(API_URLS.homework + `?action=submissions&homework_id=${homeworkId}`, {
+      headers: { 'X-User-Id': user?.id }
+    });
     const data = await res.json();
-    setSubmissions(data);
+    const filtered = data.filter((sub: any) => sub.student_id !== user?.id);
+    setSubmissions(filtered);
   };
 
   const createWebinar = async (e: React.FormEvent) => {
@@ -466,17 +563,18 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b sticky top-0 z-50 shadow-sm">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-red-50">
+      <SnowEffect />
+      <header className="bg-white/90 backdrop-blur-sm border-b sticky top-0 z-50 shadow-sm border-red-200">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+              <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-green-600 rounded-lg flex items-center justify-center shadow-lg">
                 <Icon name="MapPin" size={24} className="text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-primary">Ленарело</h1>
-                <p className="text-xs text-muted-foreground">ОГЭ География</p>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-red-600 to-green-600 bg-clip-text text-transparent">Ленарело 🎄</h1>
+                <p className="text-xs text-muted-foreground">ОГЭ География • С Новым Годом!</p>
               </div>
             </div>
             
@@ -594,7 +692,7 @@ const Index = () => {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-3xl font-bold mb-2">Вебинары</h2>
+                <h2 className="text-3xl font-bold mb-2">🎥 Вебинары</h2>
                 <p className="text-muted-foreground">Смотрите обучающие видео</p>
               </div>
               {(user.is_teacher || user.is_admin) && (
@@ -611,6 +709,18 @@ const Index = () => {
               )}
             </div>
 
+            {!selectedWebinar && (
+              <div className="relative">
+                <Icon name="Search" size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Поиск вебинаров..."
+                  value={webinarFilter}
+                  onChange={(e) => setWebinarFilter(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            )}
+
             {selectedWebinar ? (
               <div className="space-y-4">
                 <Button variant="ghost" onClick={() => setSelectedWebinar(null)}>
@@ -625,12 +735,25 @@ const Index = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="aspect-video bg-black rounded-lg mb-4">
-                      <iframe
-                        src={selectedWebinar.video_url}
-                        className="w-full h-full rounded-lg"
-                        allowFullScreen
-                        title={selectedWebinar.title}
-                      />
+                      {selectedWebinar.video_url ? (
+                        <iframe
+                          src={selectedWebinar.video_url.includes('youtube.com/watch?v=') 
+                            ? selectedWebinar.video_url.replace('watch?v=', 'embed/').split('&')[0]
+                            : selectedWebinar.video_url}
+                          className="w-full h-full rounded-lg"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          allowFullScreen
+                          frameBorder="0"
+                          title={selectedWebinar.title}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white">
+                          <div className="text-center">
+                            <Icon name="VideoOff" size={48} className="mx-auto mb-2 opacity-50" />
+                            <p>Видео не загружено</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1">
@@ -644,7 +767,7 @@ const Index = () => {
               </div>
             ) : (
               <div className="grid md:grid-cols-2 gap-6">
-                {webinars.map((webinar) => (
+                {filteredWebinars.map((webinar) => (
                   <Card key={webinar.id} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setSelectedWebinar(webinar)}>
                     <CardHeader>
                       <CardTitle>{webinar.title}</CardTitle>
@@ -665,6 +788,15 @@ const Index = () => {
                   </Card>
                 ))}
                 
+                {filteredWebinars.length === 0 && webinars.length > 0 && (
+                  <Card className="col-span-2">
+                    <CardContent className="py-12 text-center">
+                      <Icon name="Search" size={48} className="mx-auto text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">Ничего не найдено</p>
+                    </CardContent>
+                  </Card>
+                )}
+                
                 {webinars.length === 0 && (
                   <Card className="col-span-2">
                     <CardContent className="py-12 text-center">
@@ -678,11 +810,24 @@ const Index = () => {
           </div>
         )}
 
+        {currentView === 'schedule' && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-3xl font-bold">📅 Расписание</h2>
+            </div>
+            <Calendar 
+              scheduleItems={scheduleItems}
+              onAddEvent={addScheduleEvent}
+              isAdmin={user?.is_admin || false}
+            />
+          </div>
+        )}
+
         {currentView === 'homework' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-3xl font-bold mb-2">Домашние задания</h2>
+                <h2 className="text-3xl font-bold mb-2">📚 Домашние задания</h2>
                 <p className="text-muted-foreground">Выполняйте задания в срок</p>
               </div>
               {(user.is_teacher || user.is_admin) && (
@@ -699,28 +844,41 @@ const Index = () => {
               )}
             </div>
 
+            <div className="relative">
+              <Icon name="Search" size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Поиск заданий..."
+                value={homeworkFilter}
+                onChange={(e) => setHomeworkFilter(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
             {homeworkStats && (
               <div className="grid md:grid-cols-3 gap-4">
-                <Card>
+                <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
                   <CardContent className="pt-6">
                     <div className="text-center">
-                      <p className="text-3xl font-bold text-primary">{homeworkStats.total_homework || 0}</p>
+                      <Icon name="FileText" size={32} className="mx-auto text-blue-600 mb-2" />
+                      <p className="text-3xl font-bold text-blue-600">{homeworkStats.total_homework || 0}</p>
                       <p className="text-sm text-muted-foreground">Всего заданий</p>
                     </div>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="bg-gradient-to-br from-green-50 to-white border-green-200">
                   <CardContent className="pt-6">
                     <div className="text-center">
-                      <p className="text-3xl font-bold text-primary">{homeworkStats.submitted_homework || 0}</p>
+                      <Icon name="CheckCircle" size={32} className="mx-auto text-green-600 mb-2" />
+                      <p className="text-3xl font-bold text-green-600">{homeworkStats.submitted_homework || 0}</p>
                       <p className="text-sm text-muted-foreground">Выполнено</p>
                     </div>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="bg-gradient-to-br from-yellow-50 to-white border-yellow-200">
                   <CardContent className="pt-6">
                     <div className="text-center">
-                      <p className="text-3xl font-bold text-primary">
+                      <Icon name="Trophy" size={32} className="mx-auto text-yellow-600 mb-2" />
+                      <p className="text-3xl font-bold text-yellow-600">
                         {homeworkStats.average_score ? Math.round(homeworkStats.average_score) : 0}%
                       </p>
                       <p className="text-sm text-muted-foreground">Средний балл</p>
@@ -806,7 +964,7 @@ const Index = () => {
               </div>
             ) : !selectedHomework ? (
               <div className="space-y-4">
-                {homework.map((hw) => {
+                {filteredHomework.map((hw) => {
                   const deadline = new Date(hw.deadline);
                   const isOverdue = deadline < new Date();
                   
@@ -857,6 +1015,15 @@ const Index = () => {
                     </Card>
                   );
                 })}
+                
+                {filteredHomework.length === 0 && homework.length > 0 && (
+                  <Card>
+                    <CardContent className="py-12 text-center">
+                      <Icon name="Search" size={48} className="mx-auto text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">Ничего не найдено</p>
+                    </CardContent>
+                  </Card>
+                )}
                 
                 {homework.length === 0 && (
                   <Card>
@@ -1039,66 +1206,84 @@ const Index = () => {
         {currentView === 'admin' && (user.is_admin || user.is_teacher) && (
           <div className="space-y-8">
             <div>
-              <h2 className="text-3xl font-bold mb-2">Панель {user.is_teacher ? 'учителя' : 'администратора'}</h2>
+              <h2 className="text-3xl font-bold mb-2">⚙️ Панель {user.is_teacher ? 'учителя' : 'администратора'}</h2>
               <p className="text-muted-foreground">Управление контентом и статистика учеников</p>
             </div>
 
             <div className="grid md:grid-cols-4 gap-4">
-              <Card>
+              <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
                 <CardContent className="pt-6">
                   <div className="text-center">
-                    <Icon name="Users" size={32} className="mx-auto text-primary mb-2" />
-                    <p className="text-3xl font-bold text-primary">{submissions.length}</p>
+                    <Icon name="Users" size={32} className="mx-auto text-blue-600 mb-2" />
+                    <p className="text-3xl font-bold text-blue-600">{inviteCodes.reduce((sum, c) => sum + c.usage_count, 0)}</p>
                     <p className="text-sm text-muted-foreground">Всего учеников</p>
                   </div>
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="bg-gradient-to-br from-purple-50 to-white border-purple-200">
                 <CardContent className="pt-6">
                   <div className="text-center">
-                    <Icon name="Video" size={32} className="mx-auto text-primary mb-2" />
-                    <p className="text-3xl font-bold text-primary">{webinars.length}</p>
+                    <Icon name="Video" size={32} className="mx-auto text-purple-600 mb-2" />
+                    <p className="text-3xl font-bold text-purple-600">{webinars.length}</p>
                     <p className="text-sm text-muted-foreground">Вебинаров создано</p>
                   </div>
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="bg-gradient-to-br from-orange-50 to-white border-orange-200">
                 <CardContent className="pt-6">
                   <div className="text-center">
-                    <Icon name="BookOpen" size={32} className="mx-auto text-primary mb-2" />
-                    <p className="text-3xl font-bold text-primary">{homework.length}</p>
+                    <Icon name="BookOpen" size={32} className="mx-auto text-orange-600 mb-2" />
+                    <p className="text-3xl font-bold text-orange-600">{homework.length}</p>
                     <p className="text-sm text-muted-foreground">Заданий активно</p>
                   </div>
                 </CardContent>
               </Card>
-              <Card>
+              <Card className="bg-gradient-to-br from-green-50 to-white border-green-200">
                 <CardContent className="pt-6">
                   <div className="text-center">
-                    <Icon name="CheckCircle" size={32} className="mx-auto text-primary mb-2" />
-                    <p className="text-3xl font-bold text-primary">{mySubmissions.length}</p>
+                    <Icon name="CheckCircle" size={32} className="mx-auto text-green-600 mb-2" />
+                    <p className="text-3xl font-bold text-green-600">{mySubmissions.filter(s => s.score !== null).length}</p>
                     <p className="text-sm text-muted-foreground">Работ проверено</p>
                   </div>
                 </CardContent>
               </Card>
             </div>
 
-            <Card>
+            <Card className="border-2 border-green-200 bg-gradient-to-br from-green-50 to-white">
               <CardHeader>
-                <CardTitle>Код приглашения для учеников</CardTitle>
-                <CardDescription>Дайте этот код ученикам для регистрации</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  🎁 Коды приглашения для учеников
+                </CardTitle>
+                <CardDescription>Создавайте коды для регистрации новых учеников</CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                 <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <div className="bg-primary/10 p-4 rounded-lg text-center">
-                      <p className="text-3xl font-bold text-primary tracking-wider">{inviteCode}</p>
-                    </div>
-                  </div>
-                  <Button onClick={generateInviteCode} variant="outline">
-                    <Icon name="RefreshCw" size={16} className="mr-2" />
-                    Новый код
+                  <Button onClick={generateInviteCode} className="bg-gradient-to-r from-green-500 to-green-600">
+                    <Icon name="Plus" size={16} className="mr-2" />
+                    Создать новый код
                   </Button>
                 </div>
+                
+                {inviteCodes.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Все коды:</p>
+                    <div className="grid gap-2">
+                      {inviteCodes.slice(0, 5).map((code) => (
+                        <div key={code.code} className="flex items-center justify-between bg-white p-3 rounded-lg border">
+                          <div>
+                            <p className="text-lg font-bold text-primary">{code.code}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Использован: {code.usage_count} раз • {code.is_active ? '✅ Активен' : '❌ Неактивен'}
+                            </p>
+                          </div>
+                          <Badge variant={code.is_active ? 'default' : 'secondary'}>
+                            {code.is_active ? 'Работает' : 'Отключен'}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -1171,8 +1356,8 @@ const Index = () => {
                     <label className="text-sm font-medium mb-2 block">Длительность (минуты)</label>
                     <Input 
                       type="number"
-                      value={newWebinar.duration}
-                      onChange={(e) => setNewWebinar({...newWebinar, duration: parseInt(e.target.value)})}
+                      value={newWebinar.duration || ''}
+                      onChange={(e) => setNewWebinar({...newWebinar, duration: parseInt(e.target.value) || 0})}
                       placeholder="45"
                       required
                     />
