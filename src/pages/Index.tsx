@@ -244,7 +244,9 @@ const Index = () => {
   };
 
   const loadHomework = async () => {
-    const res = await fetch(API_URLS.homework + '?action=list');
+    const res = await fetch(API_URLS.homework + '?action=list', {
+      headers: { 'X-User-Id': user?.id }
+    });
     const data = await res.json();
     setHomework(data);
   };
@@ -1371,135 +1373,17 @@ const Index = () => {
                 </CardContent>
               </Card>
             </div>
+            )}
 
-            <Card className="border-2 border-green-200 bg-gradient-to-br from-green-50 to-white">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  🎁 Коды приглашения для учеников
-                </CardTitle>
-                <CardDescription>Создавайте коды для регистрации новых учеников</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <Button onClick={generateInviteCode} className="bg-gradient-to-r from-green-500 to-green-600">
-                    <Icon name="Plus" size={16} className="mr-2" />
-                    Создать новый код
-                  </Button>
-                </div>
-                
-                {inviteCodes.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Все коды:</p>
-                    <div className="grid gap-2">
-                      {inviteCodes.slice(0, 5).map((code) => (
-                        <div key={code.code} className="flex items-center justify-between bg-white p-3 rounded-lg border">
-                          <div>
-                            <p className="text-lg font-bold text-primary">{code.code}</p>
-                            <p className="text-xs text-muted-foreground">
-                              Использован: {code.usage_count} раз • {code.is_active ? '✅ Активен' : '❌ Неактивен'}
-                            </p>
-                          </div>
-                          <Badge variant={code.is_active ? 'default' : 'secondary'}>
-                            {code.is_active ? 'Работает' : 'Отключен'}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Создать вебинар</CardTitle>
-                <CardDescription>Добавьте новое обучающее видео</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={createWebinar} className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Название</label>
-                    <Input 
-                      value={newWebinar.title}
-                      onChange={(e) => setNewWebinar({...newWebinar, title: e.target.value})}
-                      placeholder="Название вебинара"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Описание</label>
-                    <Textarea 
-                      value={newWebinar.description}
-                      onChange={(e) => setNewWebinar({...newWebinar, description: e.target.value})}
-                      placeholder="Краткое описание"
-                      rows={3}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Ссылка на видео (YouTube embed) или загрузить файл</label>
-                    <Input 
-                      value={newWebinar.video_url}
-                      onChange={(e) => setNewWebinar({...newWebinar, video_url: e.target.value})}
-                      placeholder="https://www.youtube.com/embed/..."
-                      disabled={videoFile !== null}
-                    />
-                    <div className="mt-2">
-                      <label className="flex items-center gap-2 cursor-pointer border-2 border-dashed rounded-lg p-3 hover:bg-muted/50 transition-colors">
-                        <Icon name="Upload" size={20} className="text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground">
-                          {videoFile ? videoFile.name : 'Или загрузите видео с устройства'}
-                        </span>
-                        <input 
-                          type="file"
-                          accept="video/*"
-                          className="hidden"
-                          onChange={(e) => {
-                            if (e.target.files && e.target.files[0]) {
-                              setVideoFile(e.target.files[0]);
-                              setNewWebinar({...newWebinar, video_url: ''});
-                            }
-                          }}
-                        />
-                      </label>
-                      {videoFile && (
-                        <Button 
-                          type="button"
-                          size="sm" 
-                          variant="ghost" 
-                          className="mt-2"
-                          onClick={() => setVideoFile(null)}
-                        >
-                          <Icon name="X" size={14} className="mr-1" />
-                          Удалить файл
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Длительность (минуты)</label>
-                    <Input 
-                      type="number"
-                      value={newWebinar.duration || ''}
-                      onChange={(e) => setNewWebinar({...newWebinar, duration: parseInt(e.target.value) || 0})}
-                      placeholder="45"
-                      required
-                    />
-                  </div>
-                  <Button type="submit" className="w-full">
-                    <Icon name="Plus" size={16} className="mr-2" />
-                    Создать вебинар
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Создать домашнее задание</CardTitle>
-                <CardDescription>Добавьте новое задание для учеников</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={createHomework} className="space-y-4">
+            {adminTab === 'create' && (
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Создать домашнее задание</CardTitle>
+                    <CardDescription>Добавьте новое задание для учеников</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={createHomework} className="space-y-4">
                   <div>
                     <label className="text-sm font-medium mb-2 block">Название</label>
                     <Input 
@@ -1672,15 +1556,11 @@ const Index = () => {
               </CardContent>
             </Card>
             
-            )}
-
-            {adminTab === 'create' && (
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Создать вебинар</CardTitle>
-                    <CardDescription>Добавьте новое обучающее видео</CardDescription>
-                  </CardHeader>
+            <Card>
+              <CardHeader>
+                <CardTitle>Создать вебинар</CardTitle>
+                <CardDescription>Добавьте новое обучающее видео</CardDescription>
+              </CardHeader>
                   <CardContent>
                     <form onSubmit={createWebinar} className="space-y-4">
                       <div>
@@ -1712,13 +1592,11 @@ const Index = () => {
                           disabled={videoFile !== null}
                         />
                         <div className="mt-2">
-                          <label className="cursor-pointer">
-                            <Button type="button" variant="outline" size="sm" asChild>
-                              <span>
-                                <Icon name="Upload" size={14} className="mr-2" />
-                                {videoFile ? videoFile.name : 'Загрузить видео из галереи'}
-                              </span>
-                            </Button>
+                          <label className="cursor-pointer inline-block">
+                            <span className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3">
+                              <Icon name="Upload" size={14} className="mr-2" />
+                              {videoFile ? videoFile.name : 'Загрузить видео из галереи'}
+                            </span>
                             <input
                               type="file"
                               accept="video/*"
@@ -1763,6 +1641,46 @@ const Index = () => {
                   </CardContent>
                 </Card>
               </div>
+            )}
+
+            {adminTab === 'overview' && (
+              <Card className="border-2 border-green-200 bg-gradient-to-br from-green-50 to-white">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    🎁 Коды приглашения для учеников
+                  </CardTitle>
+                  <CardDescription>Создавайте коды для регистрации новых учеников</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <Button onClick={generateInviteCode} className="bg-gradient-to-r from-green-500 to-green-600">
+                      <Icon name="Plus" size={16} className="mr-2" />
+                      Создать новый код
+                    </Button>
+                  </div>
+                  
+                  {inviteCodes.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Все коды:</p>
+                      <div className="grid gap-2">
+                        {inviteCodes.slice(0, 5).map((code) => (
+                          <div key={code.code} className="flex items-center justify-between bg-white p-3 rounded-lg border">
+                            <div>
+                              <p className="text-lg font-bold text-primary">{code.code}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Использован: {code.usage_count} раз • {code.is_active ? '✅ Активен' : '❌ Неактивен'}
+                              </p>
+                            </div>
+                            <Badge variant={code.is_active ? 'default' : 'secondary'}>
+                              {code.is_active ? 'Работает' : 'Отключен'}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             )}
 
             {adminTab === 'teacher' && (
