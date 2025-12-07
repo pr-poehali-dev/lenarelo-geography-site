@@ -9,6 +9,7 @@ import SnowEffect from '@/components/SnowEffect';
 import Calendar from '@/components/Calendar';
 import TeacherPanel from '@/components/TeacherPanel';
 import AssignHomework from '@/components/AssignHomework';
+import HomeworkForm from '@/components/HomeworkForm';
 
 const API_URLS = {
   auth: 'https://functions.poehali.dev/d06cbbbe-85c4-47b7-b4fe-3b3eadd35afa',
@@ -47,7 +48,10 @@ const Index = () => {
     description: '',
     homework_type: 'text',
     deadline: '',
-    max_score: 1
+    max_score: 1,
+    has_part2: false,
+    part2_description: '',
+    part2_max_score: 0
   });
   const [testQuestions, setTestQuestions] = useState<any[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState({
@@ -326,7 +330,16 @@ const Index = () => {
     });
     
     if (res.ok) {
-      setNewHomework({ title: '', description: '', homework_type: 'text', deadline: '', max_score: 1 });
+      setNewHomework({ 
+        title: '', 
+        description: '', 
+        homework_type: 'text', 
+        deadline: '', 
+        max_score: 1,
+        has_part2: false,
+        part2_description: '',
+        part2_max_score: 0
+      });
       setTestQuestions([]);
       setCurrentQuestion({ question: '', options: ['', '', '', ''], correct: 0 });
       setSelectedStudents([]);
@@ -1377,13 +1390,28 @@ const Index = () => {
 
             {adminTab === 'create' && (
               <div className="space-y-6">
-                <Card>
+                <HomeworkForm
+                  newHomework={newHomework}
+                  setNewHomework={setNewHomework}
+                  testQuestions={testQuestions}
+                  setTestQuestions={setTestQuestions}
+                  currentQuestion={currentQuestion}
+                  setCurrentQuestion={setCurrentQuestion}
+                  allStudents={allStudents}
+                  selectedStudents={selectedStudents}
+                  setSelectedStudents={setSelectedStudents}
+                  studentSearchQuery={studentSearchQuery}
+                  setStudentSearchQuery={setStudentSearchQuery}
+                  onSubmit={createHomework}
+                />
+
+                <Card className="border-2 border-blue-200">
                   <CardHeader>
-                    <CardTitle>Создать домашнее задание</CardTitle>
-                    <CardDescription>Добавьте новое задание для учеников</CardDescription>
+                    <CardTitle>Создать вебинар СТАРАЯ ФОРМА (удалить)</CardTitle>
+                    <CardDescription>Добавьте новое обучающее видео</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <form onSubmit={createHomework} className="space-y-4">
+                    <form onSubmit={createWebinar} className="space-y-4">
                   <div>
                     <label className="text-sm font-medium mb-2 block">Название</label>
                     <Input 

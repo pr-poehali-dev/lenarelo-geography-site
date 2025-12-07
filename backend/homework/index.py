@@ -178,16 +178,21 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             deadline = body.get('deadline')
             questions = body.get('questions', [])
             max_score = body.get('max_score', 1)
+            has_part2 = body.get('has_part2', False)
+            part2_description = body.get('part2_description', '')
+            part2_max_score = body.get('part2_max_score', 0)
             
             title_esc = title.replace("'", "''")
             description_esc = description.replace("'", "''")
             homework_type_esc = homework_type.replace("'", "''")
             deadline_esc = deadline.replace("'", "''")
+            part2_description_esc = part2_description.replace("'", "''")
             user_id_int = int(user_id)
             max_score_int = int(max_score)
+            part2_max_score_int = int(part2_max_score)
             
             cur.execute(
-                f"INSERT INTO homework (title, description, homework_type, deadline, created_by, max_score) VALUES ('{title_esc}', '{description_esc}', '{homework_type_esc}', '{deadline_esc}', {user_id_int}, {max_score_int}) RETURNING *"
+                f"INSERT INTO homework (title, description, homework_type, deadline, created_by, max_score, has_part2, part2_description, part2_max_score) VALUES ('{title_esc}', '{description_esc}', '{homework_type_esc}', '{deadline_esc}', {user_id_int}, {max_score_int}, {has_part2}, '{part2_description_esc}', {part2_max_score_int}) RETURNING *"
             )
             homework = cur.fetchone()
             homework_id = homework['id']
@@ -217,12 +222,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             submission_type = body.get('submission_type')
             submission_data = body.get('submission_data')
             file_url = body.get('file_url')
+            part2_text = body.get('part2_text', '')
+            part2_file_url = body.get('part2_file_url', '')
             
             homework_id_int = int(homework_id)
             user_id_int = int(user_id)
             submission_type_esc = submission_type.replace("'", "''")
             submission_data_json = json.dumps(submission_data).replace("'", "''") if submission_data else 'NULL'
             file_url_esc = file_url.replace("'", "''") if file_url else 'NULL'
+            part2_text_esc = part2_text.replace("'", "''")
+            part2_file_url_esc = part2_file_url.replace("'", "''") if part2_file_url else 'NULL'
             
             auto_score = None
             is_auto_graded = False
@@ -231,7 +240,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 cur.execute(f"SELECT * FROM homework_questions WHERE homework_id = {homework_id_int} ORDER BY order_num ASC")
                 questions = cur.fetchall()
                 
-                cur.execute(f"SELECT max_score FROM homework WHERE id = {homework_id_int}")
+                cur.execute(f"SELECT max_score, has_part2 FROM homework WHERE id = {homework_id_int}")
                 hw = cur.fetchone()
                 max_score = hw['max_score'] if hw else 1
                 
@@ -248,30 +257,60 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             if submission_data_json == 'NULL' and file_url_esc == 'NULL':
                 if is_auto_graded:
+                    if part2_file_url_esc == 'NULL':
+                        cur.execute(
+                            f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, part1_score, is_auto_graded, part2_text, part2_file_url) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', NULL, NULL, {auto_score}, TRUE, '{part2_text_esc}', NULL) RETURNING *"
+                        )
+                    else:
+                        cur.execute(
+                            f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, part1_score, is_auto_graded, part2_text, part2_file_url) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', NULL, NULL, {auto_score}, TRUE, '{part2_text_esc}', '{part2_file_url_esc}') RETURNING *"
+                        )
+                else:
+                    if part2_file_url_esc == 'NULL':
+                        cur.execute(
+                            f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, is_auto_graded, part2_text, part2_file_url) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', NULL, NULL, FALSE, '{part2_text_esc}', NULL) RETURNING *"
+                        )
+                    else:
+                        cur.execute(
+                            f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, is_auto_graded, part2_text, part2_file_url) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', NULL, NULL, FALSE, '{part2_text_esc}', '{part2_file_url_esc}') RETURNING *"
+                        )
+            elif submission_data_json == 'NULL':
+                if part2_file_url_esc == 'NULL':
                     cur.execute(
-                        f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, score, is_auto_graded) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', NULL, NULL, {auto_score}, TRUE) RETURNING *"
+                        f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, is_auto_graded, part2_text, part2_file_url) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', NULL, '{file_url_esc}', FALSE, '{part2_text_esc}', NULL) RETURNING *"
                     )
                 else:
                     cur.execute(
-                        f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, is_auto_graded) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', NULL, NULL, FALSE) RETURNING *"
+                        f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, is_auto_graded, part2_text, part2_file_url) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', NULL, '{file_url_esc}', FALSE, '{part2_text_esc}', '{part2_file_url_esc}') RETURNING *"
                     )
-            elif submission_data_json == 'NULL':
-                cur.execute(
-                    f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, is_auto_graded) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', NULL, '{file_url_esc}', FALSE) RETURNING *"
-                )
             elif file_url_esc == 'NULL':
                 if is_auto_graded:
+                    if part2_file_url_esc == 'NULL':
+                        cur.execute(
+                            f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, part1_score, is_auto_graded, part2_text, part2_file_url) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', '{submission_data_json}', NULL, {auto_score}, TRUE, '{part2_text_esc}', NULL) RETURNING *"
+                        )
+                    else:
+                        cur.execute(
+                            f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, part1_score, is_auto_graded, part2_text, part2_file_url) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', '{submission_data_json}', NULL, {auto_score}, TRUE, '{part2_text_esc}', '{part2_file_url_esc}') RETURNING *"
+                        )
+                else:
+                    if part2_file_url_esc == 'NULL':
+                        cur.execute(
+                            f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, is_auto_graded, part2_text, part2_file_url) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', '{submission_data_json}', NULL, FALSE, '{part2_text_esc}', NULL) RETURNING *"
+                        )
+                    else:
+                        cur.execute(
+                            f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, is_auto_graded, part2_text, part2_file_url) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', '{submission_data_json}', NULL, FALSE, '{part2_text_esc}', '{part2_file_url_esc}') RETURNING *"
+                        )
+            else:
+                if part2_file_url_esc == 'NULL':
                     cur.execute(
-                        f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, score, is_auto_graded) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', '{submission_data_json}', NULL, {auto_score}, TRUE) RETURNING *"
+                        f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, is_auto_graded, part2_text, part2_file_url) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', '{submission_data_json}', '{file_url_esc}', FALSE, '{part2_text_esc}', NULL) RETURNING *"
                     )
                 else:
                     cur.execute(
-                        f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, is_auto_graded) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', '{submission_data_json}', NULL, FALSE) RETURNING *"
+                        f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, is_auto_graded, part2_text, part2_file_url) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', '{submission_data_json}', '{file_url_esc}', FALSE, '{part2_text_esc}', '{part2_file_url_esc}') RETURNING *"
                     )
-            else:
-                cur.execute(
-                    f"INSERT INTO homework_submissions (homework_id, user_id, submission_type, submission_data, file_url, is_auto_graded) VALUES ({homework_id_int}, {user_id_int}, '{submission_type_esc}', '{submission_data_json}', '{file_url_esc}', FALSE) RETURNING *"
-                )
             submission = cur.fetchone()
             conn.commit()
             
@@ -287,20 +326,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         elif action == 'grade':
             submission_id = body.get('submission_id')
-            score = body.get('score')
+            part2_score = body.get('part2_score')
             feedback = body.get('feedback', '')
             
-            score_val = int(score) if score else 'NULL'
+            part2_score_val = int(part2_score) if part2_score else 'NULL'
             feedback_esc = feedback.replace("'", "''")
             submission_id_int = int(submission_id)
             
-            if score_val == 'NULL':
+            if part2_score_val == 'NULL':
                 cur.execute(
-                    f"UPDATE homework_submissions SET score = NULL, feedback = '{feedback_esc}' WHERE id = {submission_id_int} RETURNING *"
+                    f"UPDATE homework_submissions SET part2_score = NULL, feedback = '{feedback_esc}' WHERE id = {submission_id_int} RETURNING *"
                 )
             else:
                 cur.execute(
-                    f"UPDATE homework_submissions SET score = {score_val}, feedback = '{feedback_esc}' WHERE id = {submission_id_int} RETURNING *"
+                    f"UPDATE homework_submissions SET part2_score = {part2_score_val}, feedback = '{feedback_esc}', score = COALESCE(part1_score, 0) + {part2_score_val} WHERE id = {submission_id_int} RETURNING *"
                 )
             submission = cur.fetchone()
             conn.commit()
