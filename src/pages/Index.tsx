@@ -7,6 +7,8 @@ import { Textarea } from '@/components/ui/textarea';
 import Icon from '@/components/ui/icon';
 import SnowEffect from '@/components/SnowEffect';
 import Calendar from '@/components/Calendar';
+import TeacherPanel from '@/components/TeacherPanel';
+import AssignHomework from '@/components/AssignHomework';
 
 const API_URLS = {
   auth: 'https://functions.poehali.dev/d06cbbbe-85c4-47b7-b4fe-3b3eadd35afa',
@@ -59,6 +61,10 @@ const Index = () => {
   const [inviteCodes, setInviteCodes] = useState<any[]>([]);
   const [webinarFilter, setWebinarFilter] = useState('');
   const [homeworkFilter, setHomeworkFilter] = useState('');
+  const [allStudents, setAllStudents] = useState<any[]>([]);
+  const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+  const [adminTab, setAdminTab] = useState<'overview' | 'create' | 'teacher' | 'assign'>('overview');
 
   const filteredWebinars = useMemo(() => {
     if (!webinarFilter) return webinars;
@@ -765,12 +771,12 @@ const Index = () => {
                     <CardDescription>{selectedWebinar.description}</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="aspect-video bg-black rounded-lg mb-4">
-                      {selectedWebinar.video_file_url ? (
+                    <div className="aspect-video bg-black rounded-lg mb-4 overflow-hidden">
+                      {selectedWebinar.video_url && (selectedWebinar.video_url.includes('cdn.poehali.dev') || selectedWebinar.video_url.includes('.mp4') || selectedWebinar.video_url.includes('.webm')) ? (
                         <video
                           controls
                           className="w-full h-full rounded-lg"
-                          src={selectedWebinar.video_file_url}
+                          src={selectedWebinar.video_url}
                         >
                           Ваш браузер не поддерживает видео.
                         </video>
@@ -843,10 +849,16 @@ const Index = () => {
                           <span className="text-xs text-muted-foreground">
                             {webinar.creator_name}
                           </span>
-                          {webinar.video_file_url && (
-                            <Badge variant="outline" className="text-xs">
+                          {webinar.video_url && (webinar.video_url.includes('cdn.poehali.dev') || webinar.video_url.includes('.mp4')) && (
+                            <Badge variant="secondary" className="text-xs">
                               <Icon name="FileVideo" size={12} className="mr-1" />
-                              Загружено
+                              Из галереи
+                            </Badge>
+                          )}
+                          {webinar.video_url && webinar.video_url.includes('youtube') && (
+                            <Badge variant="outline" className="text-xs">
+                              <Icon name="Youtube" size={12} className="mr-1" />
+                              YouTube
                             </Badge>
                           )}
                         </div>
@@ -1285,7 +1297,43 @@ const Index = () => {
               <p className="text-muted-foreground">Управление контентом и статистика учеников</p>
             </div>
 
-            <div className="grid md:grid-cols-4 gap-4">
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              <Button
+                variant={adminTab === 'overview' ? 'default' : 'outline'}
+                onClick={() => setAdminTab('overview')}
+                className="whitespace-nowrap"
+              >
+                <Icon name="BarChart3" size={16} className="mr-2" />
+                Обзор
+              </Button>
+              <Button
+                variant={adminTab === 'create' ? 'default' : 'outline'}
+                onClick={() => setAdminTab('create')}
+                className="whitespace-nowrap"
+              >
+                <Icon name="Plus" size={16} className="mr-2" />
+                Создать контент
+              </Button>
+              <Button
+                variant={adminTab === 'teacher' ? 'default' : 'outline'}
+                onClick={() => setAdminTab('teacher')}
+                className="whitespace-nowrap"
+              >
+                <Icon name="Users" size={16} className="mr-2" />
+                Мои ученики
+              </Button>
+              <Button
+                variant={adminTab === 'assign' ? 'default' : 'outline'}
+                onClick={() => setAdminTab('assign')}
+                className="whitespace-nowrap"
+              >
+                <Icon name="UserPlus" size={16} className="mr-2" />
+                Назначить задание
+              </Button>
+            </div>
+
+            {adminTab === 'overview' && (
+              <div className="grid md:grid-cols-4 gap-4">
               <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-200">
                 <CardContent className="pt-6">
                   <div className="text-center">
@@ -1624,59 +1672,115 @@ const Index = () => {
               </CardContent>
             </Card>
             
-            <Card className="border-2 border-blue-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Icon name="Users" size={24} />
-                  Мои ученики
-                </CardTitle>
-                <CardDescription>Данные для входа учеников</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Input 
-                  placeholder="Поиск по имени..."
-                  value={studentSearchQuery}
-                  onChange={(e) => setStudentSearchQuery(e.target.value)}
-                  className="mb-4"
-                />
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {allStudents
-                    .filter(s => 
-                      studentSearchQuery === '' ||
-                      s.full_name.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
-                      s.username.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
-                      s.email.toLowerCase().includes(studentSearchQuery.toLowerCase())
-                    )
-                    .map(student => (
-                      <div key={student.id} className="border rounded-lg p-4 bg-gradient-to-r from-blue-50 to-white">
-                        <div className="flex items-start justify-between">
-                          <div className="space-y-1">
-                            <p className="font-semibold text-lg">{student.full_name}</p>
-                            <div className="space-y-0.5 text-sm text-muted-foreground">
-                              <p className="flex items-center gap-2">
-                                <Icon name="User" size={14} />
-                                <span className="font-mono bg-gray-100 px-2 py-0.5 rounded">Логин: {student.username}</span>
-                              </p>
-                              <p className="flex items-center gap-2">
-                                <Icon name="Mail" size={14} />
-                                Email: {student.email}
-                              </p>
-                              <p className="flex items-center gap-2">
-                                <Icon name="Calendar" size={14} />
-                                Зарегистрирован: {new Date(student.created_at).toLocaleDateString('ru-RU')}
-                              </p>
-                            </div>
-                          </div>
-                          <Badge variant="outline">ID: {student.id}</Badge>
+            )}
+
+            {adminTab === 'create' && (
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Создать вебинар</CardTitle>
+                    <CardDescription>Добавьте новое обучающее видео</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={createWebinar} className="space-y-4">
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Название</label>
+                        <Input 
+                          value={newWebinar.title}
+                          onChange={(e) => setNewWebinar({...newWebinar, title: e.target.value})}
+                          placeholder="Название вебинара"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Описание</label>
+                        <Textarea 
+                          value={newWebinar.description}
+                          onChange={(e) => setNewWebinar({...newWebinar, description: e.target.value})}
+                          placeholder="Краткое описание"
+                          rows={3}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">
+                          Ссылка на видео (YouTube) или загрузить файл
+                        </label>
+                        <Input 
+                          value={newWebinar.video_url}
+                          onChange={(e) => setNewWebinar({...newWebinar, video_url: e.target.value})}
+                          placeholder="https://www.youtube.com/watch?v=..."
+                          disabled={videoFile !== null}
+                        />
+                        <div className="mt-2">
+                          <label className="cursor-pointer">
+                            <Button type="button" variant="outline" size="sm" asChild>
+                              <span>
+                                <Icon name="Upload" size={14} className="mr-2" />
+                                {videoFile ? videoFile.name : 'Загрузить видео из галереи'}
+                              </span>
+                            </Button>
+                            <input
+                              type="file"
+                              accept="video/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files[0]) {
+                                  setVideoFile(e.target.files[0]);
+                                  setNewWebinar({...newWebinar, video_url: ''});
+                                }
+                              }}
+                            />
+                          </label>
+                          {videoFile && (
+                            <Button 
+                              type="button"
+                              size="sm" 
+                              variant="ghost" 
+                              className="mt-2"
+                              onClick={() => setVideoFile(null)}
+                            >
+                              <Icon name="X" size={14} className="mr-1" />
+                              Удалить файл
+                            </Button>
+                          )}
                         </div>
                       </div>
-                    ))}
-                  {allStudents.length === 0 && (
-                    <p className="text-center text-muted-foreground py-8">Пока нет зарегистрированных учеников</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">Длительность (минуты)</label>
+                        <Input 
+                          type="number"
+                          value={newWebinar.duration || ''}
+                          onChange={(e) => setNewWebinar({...newWebinar, duration: parseInt(e.target.value) || 0})}
+                          placeholder="45"
+                          required
+                        />
+                      </div>
+                      <Button type="submit" className="w-full">
+                        <Icon name="Plus" size={16} className="mr-2" />
+                        Создать вебинар
+                      </Button>
+                    </form>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {adminTab === 'teacher' && (
+              <TeacherPanel user={user} apiUrl={API_URLS.auth} />
+            )}
+
+            {adminTab === 'assign' && (
+              <AssignHomework
+                user={user}
+                authUrl={API_URLS.auth}
+                homeworkUrl={API_URLS.homework}
+                homework={homework}
+                onAssigned={() => {
+                  loadHomework();
+                  alert('Задание успешно назначено!');
+                }}
+              />
+            )}
           </div>
         )}
 

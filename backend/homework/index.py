@@ -35,9 +35,27 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         action = params.get('action')
         
         if action == 'list':
-            cur.execute(
-                "SELECT h.*, u.full_name as creator_name FROM homework h LEFT JOIN users u ON h.created_by = u.id ORDER BY h.deadline ASC"
-            )
+            headers = event.get('headers', {})
+            user_id = headers.get('x-user-id') or headers.get('X-User-Id')
+            
+            if user_id:
+                user_id_int = int(user_id)
+                cur.execute(
+                    f"""
+                    SELECT h.*, u.full_name as creator_name 
+                    FROM homework h 
+                    LEFT JOIN users u ON h.created_by = u.id 
+                    LEFT JOIN homework_assignments ha ON h.id = ha.homework_id
+                    WHERE ha.homework_id IS NULL OR ha.student_id = {user_id_int}
+                    GROUP BY h.id, u.full_name
+                    ORDER BY h.deadline ASC
+                    """
+                )
+            else:
+                cur.execute(
+                    "SELECT h.*, u.full_name as creator_name FROM homework h LEFT JOIN users u ON h.created_by = u.id ORDER BY h.deadline ASC"
+                )
+            
             homework_list = cur.fetchall()
             
             cur.close()
@@ -294,6 +312,29 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'statusCode': 200,
                 'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
                 'body': json.dumps(dict(submission), default=str),
+                'isBase64Encoded': False
+            }
+        
+        elif action == 'assign':
+            homework_id = body.get('homework_id')
+            student_ids = body.get('student_ids', [])
+            
+            homework_id_int = int(homework_id)
+            
+            for student_id in student_ids:
+                student_id_int = int(student_id)
+                cur.execute(
+                    f"INSERT INTO homework_assignments (homework_id, student_id) VALUES ({homework_id_int}, {student_id_int}) ON CONFLICT DO NOTHING"
+                )
+            
+            conn.commit()
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'success': True, 'assigned': len(student_ids)}),
                 'isBase64Encoded': False
             }
     

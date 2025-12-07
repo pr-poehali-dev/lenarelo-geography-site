@@ -57,7 +57,8 @@ const Calendar = ({ scheduleItems, onAddEvent, isAdmin }: CalendarProps) => {
 
   return (
     <div className="space-y-4">
-      <Card className="bg-gradient-to-br from-blue-50 to-white border-2 border-blue-200">
+      <Card className="bg-gradient-to-br from-red-50 via-white to-green-50 border-2 border-red-200 relative overflow-hidden">
+        <div className="absolute top-2 right-2 text-2xl animate-pulse">🎄</div>
         <CardHeader>
           <div className="flex items-center justify-between">
             <Button

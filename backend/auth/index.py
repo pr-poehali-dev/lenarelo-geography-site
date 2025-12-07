@@ -196,6 +196,47 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'isBase64Encoded': False
             }
         
+        elif action == 'get_students':
+            user_id = event.get('headers', {}).get('X-User-Id')
+            if not user_id:
+                return {
+                    'statusCode': 401,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'Unauthorized'}),
+                    'isBase64Encoded': False
+                }
+            
+            conn = psycopg2.connect(database_url)
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            
+            cur.execute(f"SELECT is_admin, is_teacher FROM users WHERE id = {user_id}")
+            user_check = cur.fetchone()
+            
+            if not user_check or (not user_check['is_admin'] and not user_check.get('is_teacher', False)):
+                cur.close()
+                conn.close()
+                return {
+                    'statusCode': 403,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'Forbidden'}),
+                    'isBase64Encoded': False
+                }
+            
+            cur.execute(
+                "SELECT id, username, email, full_name, created_at FROM users WHERE is_admin = FALSE AND is_teacher = FALSE ORDER BY created_at DESC"
+            )
+            students = cur.fetchall()
+            
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps([dict(s) for s in students], default=str),
+                'isBase64Encoded': False
+            }
+        
         elif action == 'get_codes':
             user_id = event.get('headers', {}).get('X-User-Id')
             if not user_id:
