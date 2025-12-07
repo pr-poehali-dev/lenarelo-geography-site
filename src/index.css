@@ -6,33 +6,33 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 215 25% 27%;
+    --background: 140 40% 98%;
+    --foreground: 140 10% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 215 25% 27%;
+    --card-foreground: 140 10% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 215 25% 27%;
+    --popover-foreground: 140 10% 15%;
 
-    --primary: 158 64% 52%;
+    --primary: 355 78% 56%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 13% 95%;
-    --secondary-foreground: 215 25% 27%;
+    --secondary: 145 60% 45%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 220 13% 95%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 140 25% 94%;
+    --muted-foreground: 140 10% 40%;
 
-    --accent: 158 64% 52%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 45 95% 55%;
+    --accent-foreground: 140 10% 15%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 158 64% 52%;
+    --border: 140 20% 85%;
+    --input: 140 20% 85%;
+    --ring: 355 78% 56%;
 
     --radius: 0.75rem;
 
@@ -104,5 +104,22 @@
       system-ui,
       -apple-system,
       sans-serif;
+    background-image:
+      radial-gradient(
+        circle at 20% 50%,
+        rgba(220, 38, 38, 0.05) 0%,
+        transparent 50%
+      ),
+      radial-gradient(
+        circle at 80% 80%,
+        rgba(34, 197, 94, 0.05) 0%,
+        transparent 50%
+      ),
+      radial-gradient(
+        circle at 40% 20%,
+        rgba(251, 191, 36, 0.03) 0%,
+        transparent 40%
+      );
+    background-attachment: fixed;
   }
 }

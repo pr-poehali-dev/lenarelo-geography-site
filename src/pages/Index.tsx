@@ -90,11 +90,20 @@ const Index = () => {
       loadHomeworkStats();
       loadMySubmissions();
       loadSchedule();
-      if (user.is_admin) {
+      if (user.is_admin || user.is_teacher) {
         loadInviteCodes();
+        loadAllStudents();
       }
     }
   }, [user]);
+  
+  const loadAllStudents = async () => {
+    const res = await fetch(API_URLS.auth + '?action=get_students');
+    if (res.ok) {
+      const data = await res.json();
+      setAllStudents(data);
+    }
+  };
 
   const generateInviteCode = async () => {
     try {
@@ -254,17 +263,33 @@ const Index = () => {
   const createWebinar = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    let video_file_base64 = null;
+    if (videoFile) {
+      const reader = new FileReader();
+      video_file_base64 = await new Promise((resolve) => {
+        reader.onload = () => {
+          const base64 = (reader.result as string).split(',')[1];
+          resolve(base64);
+        };
+        reader.readAsDataURL(videoFile);
+      });
+    }
+    
     const res = await fetch(API_URLS.webinars, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-User-Id': user?.id
       },
-      body: JSON.stringify(newWebinar)
+      body: JSON.stringify({
+        ...newWebinar,
+        video_file_base64
+      })
     });
     
     if (res.ok) {
       setNewWebinar({ title: '', description: '', video_url: '', duration: 0 });
+      setVideoFile(null);
       loadWebinars();
       alert('Вебинар создан!');
     }
@@ -287,7 +312,8 @@ const Index = () => {
       body: JSON.stringify({ 
         action: 'create', 
         ...newHomework,
-        questions: newHomework.homework_type === 'test' ? testQuestions : []
+        questions: newHomework.homework_type === 'test' ? testQuestions : [],
+        assigned_students: selectedStudents.length > 0 ? selectedStudents : []
       })
     });
     
@@ -295,6 +321,7 @@ const Index = () => {
       setNewHomework({ title: '', description: '', homework_type: 'text', deadline: '', max_score: 1 });
       setTestQuestions([]);
       setCurrentQuestion({ question: '', options: ['', '', '', ''], correct: 0 });
+      setSelectedStudents([]);
       loadHomework();
       alert('Домашнее задание создано!');
     }
@@ -563,9 +590,9 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-red-50">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-green-50 to-white">
       <SnowEffect />
-      <header className="bg-white/90 backdrop-blur-sm border-b sticky top-0 z-50 shadow-sm border-red-200">
+      <header className="bg-white/95 backdrop-blur-md border-b sticky top-0 z-50 shadow-lg border-red-200">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -635,52 +662,56 @@ const Index = () => {
       <main className="container mx-auto px-4 py-8">
         {currentView === 'home' && (
           <div className="space-y-8">
-            <section className="text-center py-12">
-              <h2 className="text-4xl font-bold mb-4">Добро пожаловать, {user.full_name || user.username}!</h2>
+            <section className="text-center py-12 relative">
+              <div className="absolute top-0 left-1/4 text-6xl animate-bounce">🎄</div>
+              <div className="absolute top-0 right-1/4 text-6xl animate-bounce" style={{ animationDelay: '0.3s' }}>🎅</div>
+              <h2 className="text-5xl font-bold mb-4 bg-gradient-to-r from-red-600 via-green-600 to-red-600 bg-clip-text text-transparent">
+                С Новым Годом, {user.full_name || user.username}! 🎉
+              </h2>
               <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-                Твой персональный помощник для подготовки к ОГЭ по географии
+                Твой персональный помощник для подготовки к ОГЭ по географии ❄️
               </p>
             </section>
 
             <section className="grid md:grid-cols-3 gap-6">
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setCurrentView('webinars')}>
+              <Card className="hover:shadow-xl transition-all cursor-pointer border-2 border-red-200 hover:border-red-400 bg-gradient-to-br from-white to-red-50" onClick={() => setCurrentView('webinars')}>
                 <CardHeader>
-                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
-                    <Icon name="Video" size={24} className="text-primary" />
+                  <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-red-600 rounded-lg flex items-center justify-center mb-3 shadow-lg">
+                    <Icon name="Video" size={24} className="text-white" />
                   </div>
-                  <CardTitle>Вебинары</CardTitle>
+                  <CardTitle className="flex items-center gap-2">🎬 Вебинары</CardTitle>
                   <CardDescription>Обучающие видео</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold">{webinars.length}</p>
+                  <p className="text-4xl font-bold text-red-600">{webinars.length}</p>
                   <p className="text-sm text-muted-foreground">доступных вебинаров</p>
                 </CardContent>
               </Card>
 
-              <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setCurrentView('homework')}>
+              <Card className="hover:shadow-xl transition-all cursor-pointer border-2 border-green-200 hover:border-green-400 bg-gradient-to-br from-white to-green-50" onClick={() => setCurrentView('homework')}>
                 <CardHeader>
-                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
-                    <Icon name="BookOpen" size={24} className="text-primary" />
+                  <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center mb-3 shadow-lg">
+                    <Icon name="BookOpen" size={24} className="text-white" />
                   </div>
-                  <CardTitle>Домашние задания</CardTitle>
+                  <CardTitle className="flex items-center gap-2">📚 Домашние задания</CardTitle>
                   <CardDescription>Задания с дедлайном</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold">{homework.length}</p>
+                  <p className="text-4xl font-bold text-green-600">{homework.length}</p>
                   <p className="text-sm text-muted-foreground">активных заданий</p>
                 </CardContent>
               </Card>
 
-              <Card className="hover:shadow-lg transition-shadow">
+              <Card className="hover:shadow-xl transition-all border-2 border-yellow-200 hover:border-yellow-400 bg-gradient-to-br from-white to-yellow-50">
                 <CardHeader>
-                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-3">
-                    <Icon name="Award" size={24} className="text-primary" />
+                  <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-lg flex items-center justify-center mb-3 shadow-lg">
+                    <Icon name="Award" size={24} className="text-white" />
                   </div>
-                  <CardTitle>Прогресс</CardTitle>
+                  <CardTitle className="flex items-center gap-2">⭐ Прогресс</CardTitle>
                   <CardDescription>Ваша статистика</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold">{homeworkStats?.submitted_homework || 0}</p>
+                  <p className="text-4xl font-bold text-yellow-600">{homeworkStats?.submitted_homework || 0}</p>
                   <p className="text-sm text-muted-foreground">выполнено работ</p>
                 </CardContent>
               </Card>
@@ -735,7 +766,15 @@ const Index = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="aspect-video bg-black rounded-lg mb-4">
-                      {selectedWebinar.video_url ? (
+                      {selectedWebinar.video_file_url ? (
+                        <video
+                          controls
+                          className="w-full h-full rounded-lg"
+                          src={selectedWebinar.video_file_url}
+                        >
+                          Ваш браузер не поддерживает видео.
+                        </video>
+                      ) : selectedWebinar.video_url ? (
                         <iframe
                           src={(() => {
                             const url = selectedWebinar.video_url;
@@ -778,19 +817,44 @@ const Index = () => {
               </div>
             ) : (
               <div className="grid md:grid-cols-2 gap-6">
-                {filteredWebinars.map((webinar) => (
-                  <Card key={webinar.id} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setSelectedWebinar(webinar)}>
+                {filteredWebinars.map((webinar, index) => (
+                  <Card 
+                    key={webinar.id} 
+                    className={`hover:shadow-2xl transition-all cursor-pointer border-2 ${
+                      index % 3 === 0 ? 'border-red-200 hover:border-red-400 bg-gradient-to-br from-white to-red-50' :
+                      index % 3 === 1 ? 'border-green-200 hover:border-green-400 bg-gradient-to-br from-white to-green-50' :
+                      'border-yellow-200 hover:border-yellow-400 bg-gradient-to-br from-white to-yellow-50'
+                    }`} 
+                    onClick={() => setSelectedWebinar(webinar)}
+                  >
                     <CardHeader>
-                      <CardTitle>{webinar.title}</CardTitle>
+                      <CardTitle className="flex items-center gap-2">
+                        🎬 {webinar.title}
+                      </CardTitle>
                       <CardDescription>{webinar.description}</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <Icon name="Clock" size={16} />
-                          {webinar.duration} мин
-                        </span>
-                        <Button>
+                        <div className="flex flex-col gap-1">
+                          <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                            <Icon name="Clock" size={16} />
+                            {webinar.duration} мин
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {webinar.creator_name}
+                          </span>
+                          {webinar.video_file_url && (
+                            <Badge variant="outline" className="text-xs">
+                              <Icon name="FileVideo" size={12} className="mr-1" />
+                              Загружено
+                            </Badge>
+                          )}
+                        </div>
+                        <Button className={
+                          index % 3 === 0 ? 'bg-gradient-to-r from-red-500 to-red-600' :
+                          index % 3 === 1 ? 'bg-gradient-to-r from-green-500 to-green-600' :
+                          'bg-gradient-to-r from-yellow-500 to-yellow-600'
+                        }>
                           Смотреть
                           <Icon name="PlayCircle" size={16} className="ml-2" />
                         </Button>
@@ -1510,11 +1574,107 @@ const Index = () => {
                     </div>
                   )}
                   
+                  <div className="border rounded-lg p-4 space-y-3 bg-blue-50/50">
+                    <label className="text-sm font-medium flex items-center gap-2">
+                      <Icon name="Users" size={16} />
+                      Для кого это задание? (оставьте пустым для всех)
+                    </label>
+                    <Input 
+                      placeholder="Поиск учеников..."
+                      value={studentSearchQuery}
+                      onChange={(e) => setStudentSearchQuery(e.target.value)}
+                    />
+                    <div className="max-h-48 overflow-y-auto space-y-2">
+                      {allStudents
+                        .filter(s => 
+                          studentSearchQuery === '' ||
+                          s.full_name.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
+                          s.username.toLowerCase().includes(studentSearchQuery.toLowerCase())
+                        )
+                        .map(student => (
+                          <label key={student.id} className="flex items-center gap-2 cursor-pointer hover:bg-white p-2 rounded transition-colors">
+                            <input 
+                              type="checkbox"
+                              checked={selectedStudents.includes(student.id)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedStudents([...selectedStudents, student.id]);
+                                } else {
+                                  setSelectedStudents(selectedStudents.filter(id => id !== student.id));
+                                }
+                              }}
+                              className="w-4 h-4"
+                            />
+                            <span className="text-sm">{student.full_name} (@{student.username})</span>
+                          </label>
+                        ))}
+                    </div>
+                    {selectedStudents.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Выбрано учеников: {selectedStudents.length}
+                      </p>
+                    )}
+                  </div>
+                  
                   <Button type="submit" className="w-full" disabled={newHomework.homework_type === 'test' && testQuestions.length === 0}>
                     <Icon name="Plus" size={16} className="mr-2" />
                     Создать задание {newHomework.homework_type === 'test' && `(${testQuestions.length} вопросов)`}
                   </Button>
                 </form>
+              </CardContent>
+            </Card>
+            
+            <Card className="border-2 border-blue-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Icon name="Users" size={24} />
+                  Мои ученики
+                </CardTitle>
+                <CardDescription>Данные для входа учеников</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Input 
+                  placeholder="Поиск по имени..."
+                  value={studentSearchQuery}
+                  onChange={(e) => setStudentSearchQuery(e.target.value)}
+                  className="mb-4"
+                />
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {allStudents
+                    .filter(s => 
+                      studentSearchQuery === '' ||
+                      s.full_name.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
+                      s.username.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
+                      s.email.toLowerCase().includes(studentSearchQuery.toLowerCase())
+                    )
+                    .map(student => (
+                      <div key={student.id} className="border rounded-lg p-4 bg-gradient-to-r from-blue-50 to-white">
+                        <div className="flex items-start justify-between">
+                          <div className="space-y-1">
+                            <p className="font-semibold text-lg">{student.full_name}</p>
+                            <div className="space-y-0.5 text-sm text-muted-foreground">
+                              <p className="flex items-center gap-2">
+                                <Icon name="User" size={14} />
+                                <span className="font-mono bg-gray-100 px-2 py-0.5 rounded">Логин: {student.username}</span>
+                              </p>
+                              <p className="flex items-center gap-2">
+                                <Icon name="Mail" size={14} />
+                                Email: {student.email}
+                              </p>
+                              <p className="flex items-center gap-2">
+                                <Icon name="Calendar" size={14} />
+                                Зарегистрирован: {new Date(student.created_at).toLocaleDateString('ru-RU')}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge variant="outline">ID: {student.id}</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  {allStudents.length === 0 && (
+                    <p className="text-center text-muted-foreground py-8">Пока нет зарегистрированных учеников</p>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>

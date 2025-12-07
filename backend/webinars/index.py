@@ -1,11 +1,14 @@
 """
-Business: Управление вебинарами (создание, получение, список)
+Business: Управление вебинарами (создание, получение, список, загрузка видео)
 Args: event - dict с httpMethod, body, queryStringParameters
       context - object с attributes: request_id, function_name
 Returns: HTTP response dict
 """
 import json
 import os
+import base64
+import uuid
+import boto3
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from typing import Dict, Any
@@ -54,8 +57,39 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         title = body.get('title', '').replace("'", "''")
         description = body.get('description', '').replace("'", "''")
         video_url = body.get('video_url', '').replace("'", "''")
+        video_file_base64 = body.get('video_file_base64')
         thumbnail_url = body.get('thumbnail_url', '').replace("'", "''") if body.get('thumbnail_url') else 'NULL'
         duration = int(body.get('duration', 0))
+        
+        if video_file_base64:
+            try:
+                video_data = base64.b64decode(video_file_base64)
+                
+                s3 = boto3.client('s3',
+                    endpoint_url='https://bucket.poehali.dev',
+                    aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+                    aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+                )
+                
+                unique_filename = f'videos/{uuid.uuid4()}.mp4'
+                
+                s3.put_object(
+                    Bucket='files',
+                    Key=unique_filename,
+                    Body=video_data,
+                    ContentType='video/mp4'
+                )
+                
+                video_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{unique_filename}"
+            except Exception as e:
+                cur.close()
+                conn.close()
+                return {
+                    'statusCode': 400,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': f'Ошибка загрузки видео: {str(e)}'}),
+                    'isBase64Encoded': False
+                }
         
         if thumbnail_url == 'NULL':
             cur.execute(
