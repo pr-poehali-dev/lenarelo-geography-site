@@ -86,6 +86,35 @@ const Index = () => {
     );
   }, [homework, homeworkFilter]);
 
+  const groupedWebinars = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    filteredWebinars.forEach(webinar => {
+      const date = new Date(webinar.created_at);
+      const monthYear = date.toLocaleDateString('ru-RU', { year: 'numeric', month: 'long' });
+      if (!groups[monthYear]) groups[monthYear] = [];
+      groups[monthYear].push(webinar);
+    });
+    return groups;
+  }, [filteredWebinars]);
+
+  const groupedHomework = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    filteredHomework.forEach(hw => {
+      const date = new Date(hw.deadline);
+      const monthYear = date.toLocaleDateString('ru-RU', { year: 'numeric', month: 'long' });
+      if (!groups[monthYear]) groups[monthYear] = [];
+      groups[monthYear].push(hw);
+    });
+    return groups;
+  }, [filteredHomework]);
+
+  const getMotivationalMessage = (percentage: number) => {
+    if (percentage >= 80) return { text: '🎉 Отличный результат!', color: 'text-green-600' };
+    if (percentage >= 65) return { text: '👍 Хорошо, но старайся!', color: 'text-blue-600' };
+    if (percentage >= 50) return { text: '💪 Старайся больше!', color: 'text-yellow-600' };
+    return { text: '📖 Повтори тему!', color: 'text-red-600' };
+  };
+
   useEffect(() => {
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
@@ -837,8 +866,15 @@ const Index = () => {
                 </Card>
               </div>
             ) : (
-              <div className="grid md:grid-cols-2 gap-6">
-                {filteredWebinars.map((webinar, index) => (
+              <div className="space-y-8">
+                {Object.entries(groupedWebinars).map(([monthYear, monthWebinars]) => (
+                  <div key={monthYear}>
+                    <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                      <Icon name="Calendar" size={24} />
+                      {monthYear}
+                    </h3>
+                    <div className="grid md:grid-cols-2 gap-6">
+                      {monthWebinars.map((webinar, index) => (
                   <Card 
                     key={webinar.id} 
                     className={`hover:shadow-2xl transition-all cursor-pointer border-2 ${
@@ -888,6 +924,9 @@ const Index = () => {
                       </div>
                     </CardContent>
                   </Card>
+                      ))}
+                    </div>
+                  </div>
                 ))}
                 
                 {filteredWebinars.length === 0 && webinars.length > 0 && (
@@ -1065,8 +1104,15 @@ const Index = () => {
                 </Card>
               </div>
             ) : !selectedHomework ? (
-              <div className="space-y-4">
-                {filteredHomework.map((hw) => {
+              <div className="space-y-8">
+                {Object.entries(groupedHomework).map(([monthYear, monthHomework]) => (
+                  <div key={monthYear}>
+                    <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                      <Icon name="Calendar" size={24} />
+                      {monthYear}
+                    </h3>
+                    <div className="space-y-4">
+                      {monthHomework.map((hw) => {
                   const deadline = new Date(hw.deadline);
                   const isOverdue = deadline < new Date();
                   
@@ -1115,8 +1161,11 @@ const Index = () => {
                         </div>
                       </CardContent>
                     </Card>
-                  );
-                })}
+                      );
+                      })}
+                    </div>
+                  </div>
+                ))}
                 
                 {filteredHomework.length === 0 && homework.length > 0 && (
                   <Card>
@@ -1157,22 +1206,33 @@ const Index = () => {
                             <p className="text-sm text-muted-foreground mb-2">
                               Отправлено: {new Date(mySubmissions.find(s => s.homework_id === selectedHomework.id)?.submitted_at).toLocaleString('ru-RU')}
                             </p>
-                            {mySubmissions.find(s => s.homework_id === selectedHomework.id)?.score !== null && (
-                              <div className="mt-3 p-3 bg-white rounded border">
-                                <p className="font-semibold text-lg mb-1">
-                                  Оценка: {mySubmissions.find(s => s.homework_id === selectedHomework.id)?.score} из {selectedHomework.max_score || 1}
-                                </p>
-                                {mySubmissions.find(s => s.homework_id === selectedHomework.id)?.is_auto_graded && (
-                                  <Badge variant="secondary" className="mb-2">Автоматическая проверка</Badge>
-                                )}
-                                {mySubmissions.find(s => s.homework_id === selectedHomework.id)?.feedback && (
-                                  <div className="mt-2">
-                                    <p className="text-sm font-medium mb-1">Комментарий преподавателя:</p>
-                                    <p className="text-sm">{mySubmissions.find(s => s.homework_id === selectedHomework.id)?.feedback}</p>
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                            {mySubmissions.find(s => s.homework_id === selectedHomework.id)?.score !== null && (() => {
+                              const submission = mySubmissions.find(s => s.homework_id === selectedHomework.id);
+                              const score = submission?.score || 0;
+                              const maxScore = selectedHomework.max_score || 1;
+                              const percentage = (score / maxScore) * 100;
+                              const motivation = getMotivationalMessage(percentage);
+                              
+                              return (
+                                <div className="mt-3 p-3 bg-white rounded border">
+                                  <p className="font-semibold text-lg mb-1">
+                                    Оценка: {score} из {maxScore}
+                                  </p>
+                                  <p className={`text-xl font-bold mb-2 ${motivation.color}`}>
+                                    {motivation.text}
+                                  </p>
+                                  {submission?.is_auto_graded && (
+                                    <Badge variant="secondary" className="mb-2">Автоматическая проверка</Badge>
+                                  )}
+                                  {submission?.feedback && (
+                                    <div className="mt-2">
+                                      <p className="text-sm font-medium mb-1">Комментарий преподавателя:</p>
+                                      <p className="text-sm">{submission.feedback}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                             {mySubmissions.find(s => s.homework_id === selectedHomework.id)?.score === null && (
                               <p className="text-sm text-muted-foreground">⏳ Ожидает проверки преподавателем</p>
                             )}

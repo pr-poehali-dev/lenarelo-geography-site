@@ -53,24 +53,65 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         body = json.loads(event.get('body', '{}'))
         headers = event.get('headers', {})
         user_id = headers.get('x-user-id') or headers.get('X-User-Id')
+        action = body.get('action', 'create')
+        
+        if action == 'delete':
+            webinar_id = int(body.get('webinar_id'))
+            cur.execute(f"DELETE FROM webinars WHERE id = {webinar_id}")
+            conn.commit()
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'success': True}),
+                'isBase64Encoded': False
+            }
         
         title = body.get('title', '').replace("'", "''")
         description = body.get('description', '').replace("'", "''")
         video_url = body.get('video_url', '').replace("'", "''")
         video_file_base64 = body.get('video_file_base64')
+        notes_file_base64 = body.get('notes_file_base64')
         thumbnail_url = body.get('thumbnail_url', '').replace("'", "''") if body.get('thumbnail_url') else 'NULL'
         duration = int(body.get('duration', 0))
+        notes_url = 'NULL'
+        
+        s3 = None
+        if notes_file_base64 or video_file_base64:
+            s3 = boto3.client('s3',
+                endpoint_url='https://bucket.poehali.dev',
+                aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+                aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+            )
+        
+        if notes_file_base64:
+            try:
+                notes_data = base64.b64decode(notes_file_base64)
+                unique_filename = f'notes/{uuid.uuid4()}.pdf'
+                
+                s3.put_object(
+                    Bucket='files',
+                    Key=unique_filename,
+                    Body=notes_data,
+                    ContentType='application/pdf'
+                )
+                
+                notes_url = f"'https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{unique_filename}'"
+            except Exception as e:
+                cur.close()
+                conn.close()
+                return {
+                    'statusCode': 400,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': f'Ошибка загрузки конспекта: {str(e)}'}),
+                    'isBase64Encoded': False
+                }
         
         if video_file_base64:
             try:
                 video_data = base64.b64decode(video_file_base64)
-                
-                s3 = boto3.client('s3',
-                    endpoint_url='https://bucket.poehali.dev',
-                    aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-                    aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
-                )
-                
                 unique_filename = f'videos/{uuid.uuid4()}.mp4'
                 
                 s3.put_object(
@@ -91,13 +132,21 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'isBase64Encoded': False
                 }
         
-        if thumbnail_url == 'NULL':
+        if thumbnail_url == 'NULL' and notes_url == 'NULL':
             cur.execute(
-                f"INSERT INTO webinars (title, description, video_url, thumbnail_url, duration, created_by) VALUES ('{title}', '{description}', '{video_url}', NULL, {duration}, {user_id}) RETURNING *"
+                f"INSERT INTO webinars (title, description, video_url, thumbnail_url, duration, created_by, notes_url) VALUES ('{title}', '{description}', '{video_url}', NULL, {duration}, {user_id}, NULL) RETURNING *"
+            )
+        elif thumbnail_url == 'NULL':
+            cur.execute(
+                f"INSERT INTO webinars (title, description, video_url, thumbnail_url, duration, created_by, notes_url) VALUES ('{title}', '{description}', '{video_url}', NULL, {duration}, {user_id}, {notes_url}) RETURNING *"
+            )
+        elif notes_url == 'NULL':
+            cur.execute(
+                f"INSERT INTO webinars (title, description, video_url, thumbnail_url, duration, created_by, notes_url) VALUES ('{title}', '{description}', '{video_url}', '{thumbnail_url}', {duration}, {user_id}, NULL) RETURNING *"
             )
         else:
             cur.execute(
-                f"INSERT INTO webinars (title, description, video_url, thumbnail_url, duration, created_by) VALUES ('{title}', '{description}', '{video_url}', '{thumbnail_url}', {duration}, {user_id}) RETURNING *"
+                f"INSERT INTO webinars (title, description, video_url, thumbnail_url, duration, created_by, notes_url) VALUES ('{title}', '{description}', '{video_url}', '{thumbnail_url}', {duration}, {user_id}, {notes_url}) RETURNING *"
             )
         webinar = cur.fetchone()
         conn.commit()

@@ -201,10 +201,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 for idx, q in enumerate(questions):
                     question_esc = q.get('question', '').replace("'", "''")
                     options_json = json.dumps(q.get('options')).replace("'", "''")
-                    correct_esc = q.get('correct', '').replace("'", "''")
-                    cur.execute(
-                        f"INSERT INTO homework_questions (homework_id, question_text, options, correct_answer, order_num) VALUES ({homework_id}, '{question_esc}', '{options_json}', '{correct_esc}', {idx})"
-                    )
+                    correct_esc = str(q.get('correct', 0))
+                    image_url = q.get('image_url', '')
+                    image_url_esc = image_url.replace("'", "''") if image_url else ''
+                    
+                    if image_url_esc:
+                        cur.execute(
+                            f"INSERT INTO homework_questions (homework_id, question_text, options, correct_answer, order_num, image_url) VALUES ({homework_id}, '{question_esc}', '{options_json}', '{correct_esc}', {idx}, '{image_url_esc}')"
+                        )
+                    else:
+                        cur.execute(
+                            f"INSERT INTO homework_questions (homework_id, question_text, options, correct_answer, order_num) VALUES ({homework_id}, '{question_esc}', '{options_json}', '{correct_esc}', {idx})"
+                        )
             
             conn.commit()
             cur.close()
@@ -374,6 +382,26 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'statusCode': 200,
                 'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
                 'body': json.dumps({'success': True, 'assigned': len(student_ids)}),
+                'isBase64Encoded': False
+            }
+        
+        elif action == 'delete':
+            homework_id = body.get('homework_id')
+            homework_id_int = int(homework_id)
+            
+            cur.execute(f"DELETE FROM homework_questions WHERE homework_id = {homework_id_int}")
+            cur.execute(f"DELETE FROM homework_submissions WHERE homework_id = {homework_id_int}")
+            cur.execute(f"DELETE FROM homework_assignments WHERE homework_id = {homework_id_int}")
+            cur.execute(f"DELETE FROM homework WHERE id = {homework_id_int}")
+            
+            conn.commit()
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'success': True}),
                 'isBase64Encoded': False
             }
     
